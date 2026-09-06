@@ -1,0 +1,360 @@
+//! Phase 2: measure one project, classifying artifact directories.
+
+use crate::cleanup::rules::{CleanupRule, RuleSet};
+use crate::model::{CleanupArtifact, Stack};
+use crate::scanner::traversal::{is_default_ignored, is_user_ignored, MAX_DEPTH};
+use std::collections::HashSet;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::SystemTime;
+
+#[derive(Debug, Default)]
+pub struct Measurement {
+    pub total_bytes: u64,
+    pub file_count: u64,
+    /// Newest modification time among non-generated files.
+    pub source_modified_at: Option<SystemTime>,
+    pub artifacts: Vec<CleanupArtifact>,
+    pub protected_entries: Vec<String>,
+    pub warnings: Vec<String>,
+}
+
+pub struct MeasureOptions<'a> {
+    pub follow_symlinks: bool,
+    pub rules: &'a RuleSet,
+    /// Every discovered project path. Nested projects are skipped so that
+    /// their bytes are only counted once.
+    pub project_paths: &'a HashSet<PathBuf>,
+    pub ignored_paths: &'a [PathBuf],
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct TreeSize {
+    pub bytes: u64,
+    pub files: u64,
+    pub dirs: u64,
+}
+
+struct Frame {
+    path: PathBuf,
+    /// Inside `.git/` or similar: counted, but never an artifact and never
+    /// a source of activity.
+    generated: bool,
+    depth: usize,
+}
+
+const CANCEL_CHECK_EVERY: u64 = 512;
+
+pub fn measure(
+    project: &Path,
+    stacks: &[Stack],
+    restore_hint: &dyn Fn(&CleanupRule) -> Option<String>,
+    opts: &MeasureOptions,
+    cancel: &AtomicBool,
+) -> Measurement {
+    let mut m = Measurement::default();
+    let mut visited: HashSet<PathBuf> = HashSet::new();
+    let mut stack = vec![Frame {
+        path: project.to_path_buf(),
+        generated: false,
+        depth: 0,
+    }];
+    let mut ops: u64 = 0;
+
+    while let Some(frame) = stack.pop() {
+        ops += 1;
+        if ops.is_multiple_of(CANCEL_CHECK_EVERY) && cancel.load(Ordering::Relaxed) {
+            break;
+        }
+        let entries = match fs::read_dir(&frame.path) {
+            Ok(e) => e,
+            Err(err) => {
+                m.warnings.push(format!("{}: {err}", frame.path.display()));
+                continue;
+            }
+        };
+        let at_root = frame.path == project;
+
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let child = entry.path();
+            let ft = match entry.file_type() {
+                Ok(ft) => ft,
+                Err(_) => continue,
+            };
+
+            if at_root && opts.rules.is_protected(&name) {
+                m.protected_entries.push(if ft.is_dir() {
+                    format!("{name}/")
+                } else {
+                    name.clone()
+                });
+            }
+
+            if ft.is_symlink() {
+                if opts.follow_symlinks
+                    && !frame.generated
+                    && fs::metadata(&child).map(|md| md.is_dir()).unwrap_or(false)
+                {
+                    if let Ok(c) = fs::canonicalize(&child) {
+                        if c.starts_with(project) || !visited.insert(c) {
+                            continue;
+                        }
+                    }
+                    stack.push(Frame {
+                        path: child,
+                        generated: false,
+                        depth: frame.depth + 1,
+                    });
+                    continue;
+                }
+                if let Ok(md) = fs::symlink_metadata(&child) {
+                    m.total_bytes += md.len();
+                }
+                m.file_count += 1;
+                continue;
+            }
+
+            if ft.is_dir() {
+                if opts.project_paths.contains(&child) {
+                    continue; // a separate (nested) project
+                }
+                if is_user_ignored(&child, opts.ignored_paths) {
+                    continue;
+                }
+                if frame.depth >= MAX_DEPTH {
+                    continue;
+                }
+                if !frame.generated {
+                    if is_default_ignored(&name) {
+                        stack.push(Frame {
+                            path: child,
+                            generated: true,
+                            depth: frame.depth + 1,
+                        });
+                        continue;
+                    }
+                    if let Some(rule) = opts.rules.match_for(&name, stacks) {
+                        let tree = measure_tree(&child, cancel);
+                        m.total_bytes += tree.bytes;
+                        m.file_count += tree.files;
+                        m.artifacts.push(CleanupArtifact {
+                            relative_path: relative(project, &child),
+                            path: child,
+                            kind: rule.id.clone(),
+                            category: rule.category,
+                            bytes: tree.bytes,
+                            file_count: tree.files,
+                            dir_count: tree.dirs,
+                            safety: rule.safety,
+                            regeneratable: rule.regeneratable,
+                            explanation: rule.explanation.clone(),
+                            restore_hint: restore_hint(rule),
+                        });
+                        continue;
+                    }
+                }
+                stack.push(Frame {
+                    path: child,
+                    generated: frame.generated,
+                    depth: frame.depth + 1,
+                });
+                continue;
+            }
+
+            // Regular file.
+            if let Ok(md) = entry.metadata() {
+                m.total_bytes += md.len();
+                m.file_count += 1;
+                if !frame.generated {
+                    if let Ok(modified) = md.modified() {
+                        if m.source_modified_at.map(|t| modified > t).unwrap_or(true) {
+                            m.source_modified_at = Some(modified);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    m.protected_entries.sort();
+    m.protected_entries.truncate(16);
+    m.artifacts.sort_by(|a, b| b.bytes.cmp(&a.bytes));
+    m
+}
+
+/// Size of a whole directory tree. Symlinks count as their own size and are
+/// never followed: artifact trees like pnpm's `node_modules/` are full of
+/// links that would otherwise be double counted.
+pub fn measure_tree(root: &Path, cancel: &AtomicBool) -> TreeSize {
+    let mut size = TreeSize {
+        bytes: 0,
+        files: 0,
+        dirs: 1,
+    };
+    let mut stack = vec![root.to_path_buf()];
+    let mut ops: u64 = 0;
+    while let Some(dir) = stack.pop() {
+        ops += 1;
+        if ops.is_multiple_of(CANCEL_CHECK_EVERY) && cancel.load(Ordering::Relaxed) {
+            break;
+        }
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let Ok(ft) = entry.file_type() else { continue };
+            if ft.is_dir() {
+                size.dirs += 1;
+                stack.push(entry.path());
+            } else {
+                size.files += 1;
+                if let Ok(md) = entry.metadata() {
+                    size.bytes += md.len();
+                }
+            }
+        }
+    }
+    size
+}
+
+/// `apps/web/.next/` style relative path with forward slashes.
+pub fn relative(project: &Path, path: &Path) -> String {
+    let rel = path.strip_prefix(project).unwrap_or(path);
+    let mut s: String = rel
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect::<Vec<_>>()
+        .join("/");
+    s.push('/');
+    s
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    fn write(path: &Path, bytes: usize) {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, vec![b'x'; bytes]).unwrap();
+    }
+
+    #[test]
+    fn measures_artifacts_and_totals() {
+        let tmp = tempdir().unwrap();
+        let p = tmp.path().join("web");
+        write(&p.join("package.json"), 100);
+        write(&p.join("src/index.ts"), 200);
+        write(&p.join("node_modules/a/index.js"), 5000);
+        write(&p.join("node_modules/b/index.js"), 3000);
+        write(&p.join(".next/cache/x"), 1000);
+        write(&p.join(".git/objects/aa"), 700);
+        write(&p.join(".env"), 10);
+        // Nested Next output inside a sub folder still counts.
+        write(&p.join("apps/docs/.next/y"), 400);
+        // A directory named target is not an artifact for a Node project.
+        write(&p.join("target/thing"), 50);
+
+        let rules = RuleSet::builtin();
+        let paths = HashSet::new();
+        let opts = MeasureOptions {
+            follow_symlinks: false,
+            rules: &rules,
+            project_paths: &paths,
+            ignored_paths: &[],
+        };
+        let m = measure(
+            &p,
+            &[Stack::Node],
+            &|_| None,
+            &opts,
+            &AtomicBool::new(false),
+        );
+        assert_eq!(
+            m.total_bytes,
+            100 + 200 + 5000 + 3000 + 1000 + 700 + 10 + 400 + 50
+        );
+        assert_eq!(m.file_count, 9);
+        let kinds: Vec<(String, u64)> = m
+            .artifacts
+            .iter()
+            .map(|a| (a.relative_path.clone(), a.bytes))
+            .collect();
+        assert_eq!(
+            kinds,
+            vec![
+                ("node_modules/".to_string(), 8000),
+                (".next/".to_string(), 1000),
+                ("apps/docs/.next/".to_string(), 400),
+            ]
+        );
+        assert_eq!(m.artifacts[0].file_count, 2);
+        assert_eq!(m.artifacts[0].dir_count, 3);
+        assert_eq!(
+            m.protected_entries,
+            vec![".env", ".git/", "package.json", "src/"]
+        );
+    }
+
+    #[test]
+    fn nested_projects_are_excluded_from_parent() {
+        let tmp = tempdir().unwrap();
+        let p = tmp.path().join("ws");
+        write(&p.join("Cargo.toml"), 10);
+        write(&p.join("target/debug/bin"), 900);
+        write(&p.join("frontend/package.json"), 10);
+        write(&p.join("frontend/node_modules/x"), 500);
+        let rules = RuleSet::builtin();
+        let mut paths = HashSet::new();
+        paths.insert(p.join("frontend"));
+        let opts = MeasureOptions {
+            follow_symlinks: false,
+            rules: &rules,
+            project_paths: &paths,
+            ignored_paths: &[],
+        };
+        let m = measure(
+            &p,
+            &[Stack::Rust],
+            &|_| None,
+            &opts,
+            &AtomicBool::new(false),
+        );
+        assert_eq!(m.total_bytes, 910);
+        assert_eq!(m.artifacts.len(), 1);
+        assert_eq!(m.artifacts[0].kind, "rust-target");
+    }
+
+    #[test]
+    fn generated_files_do_not_affect_activity() {
+        let tmp = tempdir().unwrap();
+        let p = tmp.path().join("proj");
+        write(&p.join("package.json"), 10);
+        write(&p.join("node_modules/fresh"), 10);
+        let old = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_600_000_000);
+        let f = fs::File::options()
+            .write(true)
+            .open(p.join("package.json"))
+            .unwrap();
+        f.set_modified(old).unwrap();
+        let rules = RuleSet::builtin();
+        let paths = HashSet::new();
+        let opts = MeasureOptions {
+            follow_symlinks: false,
+            rules: &rules,
+            project_paths: &paths,
+            ignored_paths: &[],
+        };
+        let m = measure(
+            &p,
+            &[Stack::Node],
+            &|_| None,
+            &opts,
+            &AtomicBool::new(false),
+        );
+        assert_eq!(m.source_modified_at, Some(old));
+    }
+}

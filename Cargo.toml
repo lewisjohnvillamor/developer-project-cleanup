@@ -1,0 +1,33 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/hibernate-core",
+  "crates/hibernate-cli",
+  "src-tauri",
+]
+# The Tauri shell needs platform GUI libraries (WebKitGTK on Linux). The engine
+# and CLI build anywhere, so they are what `cargo build` / `cargo test` target by
+# default. Build the desktop app with `npm run tauri build` or `cargo build -p project-hibernate`.
+default-members = [
+  "crates/hibernate-core",
+  "crates/hibernate-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/lewisjohnvillamor/developer-project-cleanup"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+log = "0.4"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

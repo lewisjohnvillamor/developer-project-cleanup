@@ -1,0 +1,22 @@
+# Rust
+/target
+**/target/
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+# Tauri
+src-tauri/gen/
+src-tauri/target/
+# Editors / OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+# Logs
+*.log
+npm-debug.log*
+# Test scratch
+/tmp/

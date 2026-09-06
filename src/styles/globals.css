@@ -1,0 +1,191 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Semantic tokens. Light values on :root, dark values under .dark. */
+:root {
+  --bg: #f6f6f7;
+  --surface: #ffffff;
+  --surface-2: #f1f1f3;
+  --surface-3: #e9e9ec;
+  --border: #e3e3e7;
+  --border-strong: #cfcfd5;
+  --fg: #17171b;
+  --fg-muted: #5f6068;
+  --fg-subtle: #8b8c95;
+  --accent: #2563eb;
+  --accent-strong: #1d4ed8;
+  --accent-fg: #ffffff;
+  --accent-soft: #e8efff;
+  --safe: #16a34a;
+  --safe-soft: #e6f6ec;
+  --review: #d97706;
+  --review-soft: #fdf1dc;
+  --danger: #dc2626;
+  --danger-soft: #fde8e8;
+  --info: #2563eb;
+  --info-soft: #e8efff;
+  --inactive: #8b8c95;
+  --inactive-soft: #ededf0;
+  --ring: rgba(37, 99, 235, 0.35);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.dark {
+  --bg: #121215;
+  --surface: #1a1a1f;
+  --surface-2: #212127;
+  --surface-3: #2a2a31;
+  --border: #2a2a31;
+  --border-strong: #3a3a43;
+  --fg: #ececf1;
+  --fg-muted: #a1a1ac;
+  --fg-subtle: #6d6d78;
+  --accent: #3b82f6;
+  --accent-strong: #60a5fa;
+  --accent-fg: #ffffff;
+  --accent-soft: #1b2a4a;
+  --safe: #22c55e;
+  --safe-soft: #12301d;
+  --review: #f59e0b;
+  --review-soft: #3a2a0f;
+  --danger: #ef4444;
+  --danger-soft: #3d1717;
+  --info: #3b82f6;
+  --info-soft: #1b2a4a;
+  --inactive: #8b8b96;
+  --inactive-soft: #26262c;
+  --ring: rgba(96, 165, 250, 0.45);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-safe: var(--safe);
+  --color-safe-soft: var(--safe-soft);
+  --color-review: var(--review);
+  --color-review-soft: var(--review-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-inactive: var(--inactive);
+  --color-inactive-soft: var(--inactive-soft);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --shadow-panel: var(--shadow);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+  user-select: none;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+.selectable {
+  user-select: text;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+/* Thin, unobtrusive scrollbars like native dev tools. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 10px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fade-in {
+  animation: fade-in 140ms ease-out;
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(16px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.slide-in-right {
+  animation: slide-in-right 160ms ease-out;
+}
+
+@keyframes indeterminate {
+  0% {
+    left: -40%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+.indeterminate::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40%;
+  background: var(--accent);
+  border-radius: 999px;
+  animation: indeterminate 1.2s ease-in-out infinite;
+}
