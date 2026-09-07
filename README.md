@@ -18,6 +18,60 @@ feels more like a project library than a disk cleaner.
 
 No account, no cloud, no telemetry. Nothing leaves your machine.
 
+![Overview: reclaimable space, largest projects, breakdown by category](docs/screenshots/overview.png)
+
+<details>
+<summary>More screenshots</summary>
+
+**Projects** – search, combinable filters, bulk selection, per-project safety.
+
+![Projects table](docs/screenshots/projects.png)
+
+**Details drawer** – why each folder can go, what stays, how to bring it back.
+
+![Project details](docs/screenshots/details.png)
+
+**Review before anything happens** – untick individual folders, opt review items in.
+
+![Hibernate review](docs/screenshots/review.png)
+
+**Results, history and wake**
+
+![Cleanup complete](docs/screenshots/complete.png)
+![History with quarantine](docs/screenshots/history.png)
+![Wake a project](docs/screenshots/wake.png)
+
+**Dark theme**
+
+![Projects, dark](docs/screenshots/projects-dark.png)
+
+</details>
+
+## How it compares
+
+There are good tools in this space. The difference is that Project Hibernate
+treats the *project* as the unit of work and puts a safety gate, a review
+step and a way back in front of every removal.
+
+| | Project Hibernate | [kondo](https://github.com/tbillington/kondo) | [npkill](https://github.com/voidcosmos/npkill) | [cargo-sweep](https://github.com/holmgr/cargo-sweep) |
+| --- | --- | --- | --- | --- |
+| Ecosystems | Node, Rust, Python, Go, JVM, .NET, iOS, Dart, Ruby, PHP, Swift, Elixir, Haskell, Zig, Unity, Terraform | Many | Node only | Rust only |
+| Desktop app + CLI | both | both | CLI | CLI |
+| Safety levels per folder (safe / review / protected) | yes | no | no | no |
+| Re-validates every path against the scan before deleting | yes | – | – | – |
+| Never removes Git, lockfiles, `.env`, `src/`… even if a rule matches | yes | – | – | – |
+| Trash / quarantine with restore | yes | no | no | no |
+| Explains *why* a folder can go and how to restore it | yes | no | no | no |
+| Monorepo members folded into the root (no double counting) | yes | partial | – | – |
+| Wake: reinstall with the right lockfile command | yes | no | no | no |
+| Last activity from source edits + Git, ignoring generated files | yes | mtime | mtime | – |
+| Incremental rescans | yes | no | no | – |
+| Protect / ignore projects | yes | no | no | – |
+
+If you only want to nuke `node_modules` folders as fast as possible, `npkill`
+is smaller and quicker. If you keep dozens of projects and want to be sure
+nothing you wrote disappears, this is for you.
+
 ## What it does
 
 - **Scans** one or more folders and finds project roots by their markers
@@ -106,6 +160,17 @@ The UI talks to the engine through a small `Backend` interface
 (`npm run dev`) an in-memory mock fakes a progressive scan, a cleanup and a
 wake so every screen can be developed without Rust.
 
+## Install
+
+Installers for Windows, macOS and Linux are attached to each
+[GitHub release](https://github.com/lewisjohnvillamor/developer-project-cleanup/releases).
+The command-line tool can be built from source today; publishing to crates.io,
+Homebrew, winget and Scoop is tracked in [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md).
+
+```bash
+cargo install --path crates/hibernate-cli   # puts `hibernate` on your PATH
+```
+
 ## Development
 
 Requirements: Rust (stable), Node 22, and on Linux the Tauri system libraries
@@ -124,6 +189,8 @@ cargo run -p hibernate-cli -- wake ~/Projects/BrowserSnaps
 npm run dev                      # http://localhost:1420
 npm test                         # Vitest: utilities + the store against the mock backend
 npm run e2e                      # Playwright walkthrough (needs the dev server running)
+npm run lint                     # Biome (TypeScript lint + format check)
+npm run check                    # everything above plus a production build
 
 # Desktop app
 npm run tauri dev
@@ -156,12 +223,20 @@ and quarantine, stored under the platform data directory
 (`%APPDATA%\ProjectHibernate`, `~/Library/Application Support/ProjectHibernate`,
 `~/.local/share/ProjectHibernate`). Set `PROJECT_HIBERNATE_DATA_DIR` to relocate it.
 
+## Contributing
+
+Bug reports, rule additions for new ecosystems and platform testing are the
+most useful contributions right now. See [CONTRIBUTING.md](CONTRIBUTING.md),
+the [roadmap](ROADMAP.md) for what is in and out of scope, and
+[SECURITY.md](SECURITY.md) for reporting anything that could delete the wrong file.
+
 ## Releasing
 
-Tag a version (`git tag v0.2.0 && git push origin v0.2.0`) and the release
-workflow builds Windows, macOS and Linux installers into a draft GitHub
-release. Signing and notarization are optional and driven by repository
-secrets; see [docs/RELEASING.md](docs/RELEASING.md).
+`npm run version:bump 0.2.0` updates every version field, then tag and push
+(`git tag v0.2.0 && git push origin v0.2.0`). The release workflow builds
+Windows, macOS and Linux installers into a draft GitHub release. Signing and
+notarization are optional and driven by repository secrets; see
+[docs/RELEASING.md](docs/RELEASING.md).
 
 ## Status
 

@@ -27,7 +27,7 @@ pub fn run() {
             let purge_ctx = ctx.clone();
             std::thread::spawn(move || purge_ctx.purge_quarantine());
             // Scheduled background scans.
-            scheduler::start(app.handle().clone(), ctx.clone());
+            scheduler::spawn(app.handle().clone(), ctx.clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

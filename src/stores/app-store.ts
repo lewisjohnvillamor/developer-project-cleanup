@@ -1,5 +1,4 @@
-import { create } from "zustand";
-import { getBackend, type Backend } from "@/lib";
+import { type Backend, getBackend } from "@/lib";
 import type {
   AppInfo,
   ArtifactOutcome,
@@ -20,6 +19,7 @@ import type {
 } from "@/types";
 import { DEFAULT_SETTINGS } from "@/types";
 import { EMPTY_FILTERS, type ProjectFilters, type SortDir, type SortKey } from "@/utils/filters";
+import { create } from "zustand";
 
 export type Page = "overview" | "projects" | "history" | "settings";
 
@@ -289,10 +289,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
             });
             if (e.type === "cancelled") get().toast("Scan cancelled. Showing partial results.", "info");
             else if (snap.summary && snap.summary.cacheHits > 0) {
-              get().toast(`Scan finished. ${snap.summary.cacheHits} folder size${snap.summary.cacheHits === 1 ? "" : "s"} reused from the previous scan.`, "success");
+              get().toast(
+                `Scan finished. ${snap.summary.cacheHits} folder size${snap.summary.cacheHits === 1 ? "" : "s"} reused from the previous scan.`,
+                "success",
+              );
             }
             get().loadTrend();
-            backend.getCacheInfo().then((c) => set({ cacheEntries: c.entries })).catch(() => {});
+            backend
+              .getCacheInfo()
+              .then((c) => set({ cacheEntries: c.entries }))
+              .catch(() => {});
           });
           break;
         }
@@ -314,7 +320,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
         case "projectStarted": {
           const per = { ...h.perProject };
           per[e.projectId] = per[e.projectId] ?? { name: e.name, bytesRecovered: 0, errorCount: 0, done: false, artifacts: [] };
-          set({ hibernate: { ...h, perProject: per, currentProjectId: e.projectId, currentArtifact: null, order: h.order.includes(e.projectId) ? h.order : [...h.order, e.projectId] } });
+          set({
+            hibernate: {
+              ...h,
+              perProject: per,
+              currentProjectId: e.projectId,
+              currentArtifact: null,
+              order: h.order.includes(e.projectId) ? h.order : [...h.order, e.projectId],
+            },
+          });
           break;
         }
         case "artifactStarted": {
@@ -332,7 +346,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
           if (pp) {
             per[e.projectId] = {
               ...pp,
-              artifacts: pp.artifacts.map((a) => (a.relativePath === e.relativePath && a.outcome === null ? { ...a, outcome: e.outcome, bytesRecovered: e.bytesRecovered } : a)),
+              artifacts: pp.artifacts.map((a) =>
+                a.relativePath === e.relativePath && a.outcome === null ? { ...a, outcome: e.outcome, bytesRecovered: e.bytesRecovered } : a,
+              ),
             };
           }
           set({ hibernate: { ...h, perProject: per, currentArtifact: null } });

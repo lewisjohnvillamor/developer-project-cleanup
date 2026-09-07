@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
-import { ClipboardCopy, Download, Eraser, Folder, FolderPlus, Loader2, Plus, Search, Trash2 } from "lucide-react";
+import { Badge, SafetyBadge } from "@/components/common/Badge";
 import { Button, IconButton } from "@/components/common/Button";
 import { Card } from "@/components/common/Card";
 import { NumberInput, RadioGroup, Select, TextInput, Toggle } from "@/components/common/Controls";
-import { Badge, SafetyBadge } from "@/components/common/Badge";
 import { useAppStore } from "@/stores/app-store";
-import { CATEGORY_LABELS, STACK_LABELS, type CleanupRule, type Disposition, type RuleMatch, type Stack, type Theme } from "@/types";
+import { CATEGORY_LABELS, type CleanupRule, type Disposition, type RuleMatch, STACK_LABELS, type Stack, type Theme } from "@/types";
 import { formatBytes } from "@/utils/format";
+import { ClipboardCopy, Download, Eraser, Folder, FolderPlus, Loader2, Plus, Search, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 
 const BUILTIN_RULES: { pattern: string; stacks: string; safety: "safe" | "review"; why: string }[] = [
   { pattern: "node_modules/", stacks: "Node", safety: "safe", why: "Installed packages generated from the lockfile." },
@@ -14,12 +14,27 @@ const BUILTIN_RULES: { pattern: string; stacks: string; safety: "safe" | "review
   { pattern: "dist/ build/ coverage/ storybook-static/", stacks: "Node · Python · Gradle · Dart", safety: "safe", why: "Build and test output." },
   { pattern: ".turbo/ .vite/ .parcel-cache/ .angular/ .webpack/ .cache/", stacks: "Node · any", safety: "safe", why: "Tool caches." },
   { pattern: "target/", stacks: "Rust · Maven", safety: "safe", why: "Compiler output and incremental caches." },
-  { pattern: "__pycache__/ .pytest_cache/ .mypy_cache/ .ruff_cache/ .tox/ .nox/ *.egg-info/", stacks: "Python", safety: "safe", why: "Bytecode, test and lint caches." },
+  {
+    pattern: "__pycache__/ .pytest_cache/ .mypy_cache/ .ruff_cache/ .tox/ .nox/ *.egg-info/",
+    stacks: "Python",
+    safety: "safe",
+    why: "Bytecode, test and lint caches.",
+  },
   { pattern: ".venv/ venv/", stacks: "Python", safety: "review", why: "Virtual environments may contain hand-installed packages." },
   { pattern: "bin/ obj/", stacks: ".NET", safety: "safe", why: "MSBuild output." },
   { pattern: ".dart_tool/", stacks: "Dart", safety: "safe", why: "Pub tooling cache." },
-  { pattern: "Pods/ vendor/ .gradle/ deps/ .terraform/", stacks: "CocoaPods · Go · PHP · Ruby · Gradle · Elixir · Terraform", safety: "review", why: "Sometimes committed or patched on purpose." },
-  { pattern: ".build/ _build/ dist-newstyle/ .stack-work/ zig-out/ zig-cache/", stacks: "Swift · Elixir · Haskell · Zig", safety: "safe", why: "Compiler output." },
+  {
+    pattern: "Pods/ vendor/ .gradle/ deps/ .terraform/",
+    stacks: "CocoaPods · Go · PHP · Ruby · Gradle · Elixir · Terraform",
+    safety: "review",
+    why: "Sometimes committed or patched on purpose.",
+  },
+  {
+    pattern: ".build/ _build/ dist-newstyle/ .stack-work/ zig-out/ zig-cache/",
+    stacks: "Swift · Elixir · Haskell · Zig",
+    safety: "safe",
+    why: "Compiler output.",
+  },
   { pattern: "Library/ Temp/ Logs/", stacks: "Unity", safety: "safe", why: "Editor caches, regenerated when the project opens." },
 ];
 
@@ -32,7 +47,13 @@ function Section({ title, children, description }: { title: string; description?
   );
 }
 
-function ListEditor({ items, onChange, placeholder, mono = true, validate }: { items: string[]; onChange: (v: string[]) => void; placeholder: string; mono?: boolean; validate?: (v: string) => string | null }) {
+function ListEditor({
+  items,
+  onChange,
+  placeholder,
+  mono = true,
+  validate,
+}: { items: string[]; onChange: (v: string[]) => void; placeholder: string; mono?: boolean; validate?: (v: string) => string | null }) {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const add = () => {
@@ -72,7 +93,21 @@ function ListEditor({ items, onChange, placeholder, mono = true, validate }: { i
   );
 }
 
-const PROTECTED_NAMES = ["src", "app", "pages", "public", "assets", "uploads", "data", "migrations", ".git", ".env", "package.json", "Cargo.toml", "Cargo.lock"];
+const PROTECTED_NAMES = [
+  "src",
+  "app",
+  "pages",
+  "public",
+  "assets",
+  "uploads",
+  "data",
+  "migrations",
+  ".git",
+  ".env",
+  "package.json",
+  "Cargo.toml",
+  "Cargo.lock",
+];
 
 export function SettingsPage() {
   const settings = useAppStore((s) => s.settings);
@@ -86,7 +121,12 @@ export function SettingsPage() {
   const exportProjects = useAppStore((s) => s.exportProjects);
   const copyDiagnostics = useAppStore((s) => s.copyDiagnostics);
   const projectCount = useAppStore((s) => s.projects.length);
-  const [ruleDraft, setRuleDraft] = useState<{ pattern: string; safety: "safe" | "review"; stacks: Stack | "any"; explanation: string }>({ pattern: "", safety: "safe", stacks: "any", explanation: "" });
+  const [ruleDraft, setRuleDraft] = useState<{ pattern: string; safety: "safe" | "review"; stacks: Stack | "any"; explanation: string }>({
+    pattern: "",
+    safety: "safe",
+    stacks: "any",
+    explanation: "",
+  });
   const [preview, setPreview] = useState<{ matches: RuleMatch[]; loading: boolean; pattern: string }>({ matches: [], loading: false, pattern: "" });
 
   // Preview which folders a draft rule would match, debounced.
@@ -136,9 +176,23 @@ export function SettingsPage() {
               <div className="text-[13px] font-medium text-fg">Theme</div>
               <div className="text-[12px] text-fg-muted">Follows the operating system by default.</div>
             </div>
-            <Select<Theme> value={settings.theme} onChange={(theme) => save({ theme })} options={[{ value: "system", label: "System" }, { value: "light", label: "Light" }, { value: "dark", label: "Dark" }]} className="w-32" />
+            <Select<Theme>
+              value={settings.theme}
+              onChange={(theme) => save({ theme })}
+              options={[
+                { value: "system", label: "System" },
+                { value: "light", label: "Light" },
+                { value: "dark", label: "Dark" },
+              ]}
+              className="w-32"
+            />
           </div>
-          <Toggle checked={settings.rememberFolders} onChange={(v) => save({ rememberFolders: v })} label="Remember previous folders" description="Reopen with the last scan results and folders." />
+          <Toggle
+            checked={settings.rememberFolders}
+            onChange={(v) => save({ rememberFolders: v })}
+            label="Remember previous folders"
+            description="Reopen with the last scan results and folders."
+          />
           <div className="py-2">
             <div className="mb-1.5 flex items-center justify-between">
               <div>
@@ -173,18 +227,46 @@ export function SettingsPage() {
               <div className="text-[13px] font-medium text-fg">Maximum scan concurrency</div>
               <div className="text-[12px] text-fg-muted">Projects measured in parallel. 0 uses one thread per core (max 8).</div>
             </div>
-            <NumberInput value={settings.maxConcurrency} onChange={(v) => save({ maxConcurrency: Math.max(0, Math.min(64, Math.round(v))) })} min={0} max={64} suffix="threads" />
+            <NumberInput
+              value={settings.maxConcurrency}
+              onChange={(v) => save({ maxConcurrency: Math.max(0, Math.min(64, Math.round(v))) })}
+              min={0}
+              max={64}
+              suffix="threads"
+            />
           </div>
           <div className="flex items-center justify-between py-2">
             <div>
               <div className="text-[13px] font-medium text-fg">Dormant after</div>
               <div className="text-[12px] text-fg-muted">Projects with no commits or source edits for this long count as dormant.</div>
             </div>
-            <NumberInput value={settings.dormantAfterDays} onChange={(v) => save({ dormantAfterDays: Math.max(1, Math.min(3650, Math.round(v))) })} min={1} max={3650} suffix="days" />
+            <NumberInput
+              value={settings.dormantAfterDays}
+              onChange={(v) => save({ dormantAfterDays: Math.max(1, Math.min(3650, Math.round(v))) })}
+              min={1}
+              max={3650}
+              suffix="days"
+            />
           </div>
-          <Toggle checked={settings.followSymlinks} onChange={(v) => save({ followSymlinks: v })} label="Follow symbolic links" description="Off by default. Every folder is still visited at most once." />
-          <Toggle checked={settings.scanHidden} onChange={(v) => save({ scanHidden: v })} label="Scan hidden folders for projects" description="Hidden artifact folders like .next/ are always measured." />
-          <Toggle checked={settings.inspectGit} onChange={(v) => save({ inspectGit: v })} label="Check Git working tree status" description={info?.gitAvailable === false ? "git was not found on this machine." : "Runs `git status` per repository to flag uncommitted changes."} disabled={info?.gitAvailable === false} />
+          <Toggle
+            checked={settings.followSymlinks}
+            onChange={(v) => save({ followSymlinks: v })}
+            label="Follow symbolic links"
+            description="Off by default. Every folder is still visited at most once."
+          />
+          <Toggle
+            checked={settings.scanHidden}
+            onChange={(v) => save({ scanHidden: v })}
+            label="Scan hidden folders for projects"
+            description="Hidden artifact folders like .next/ are always measured."
+          />
+          <Toggle
+            checked={settings.inspectGit}
+            onChange={(v) => save({ inspectGit: v })}
+            label="Check Git working tree status"
+            description={info?.gitAvailable === false ? "git was not found on this machine." : "Runs `git status` per repository to flag uncommitted changes."}
+            disabled={info?.gitAvailable === false}
+          />
           <Toggle
             checked={settings.incrementalScans}
             onChange={(v) => save({ incrementalScans: v })}
@@ -246,8 +328,19 @@ export function SettingsPage() {
               value={settings.disposition}
               onChange={(disposition) => save({ disposition })}
               options={[
-                { value: "trash", label: "Use Recycle Bin / Trash", description: info?.trashAvailable === false ? "The system Trash does not seem to be available here." : "Removed folders can be restored with the operating system's Trash." },
-                { value: "quarantine", label: "Use quarantine", description: `Moved into ${info?.quarantineDir ?? "the app's data folder"} and restorable from History until they expire.` },
+                {
+                  value: "trash",
+                  label: "Use Recycle Bin / Trash",
+                  description:
+                    info?.trashAvailable === false
+                      ? "The system Trash does not seem to be available here."
+                      : "Removed folders can be restored with the operating system's Trash.",
+                },
+                {
+                  value: "quarantine",
+                  label: "Use quarantine",
+                  description: `Moved into ${info?.quarantineDir ?? "the app's data folder"} and restorable from History until they expire.`,
+                },
                 { value: "permanent", label: "Permanent delete", description: "Removed immediately. Not reversible.", tone: "danger" },
               ]}
             />
@@ -260,9 +353,20 @@ export function SettingsPage() {
                 {info && info.quarantineBytes > 0 ? ` Currently holding ${formatBytes(info.quarantineBytes)}.` : ""}
               </div>
             </div>
-            <NumberInput value={settings.quarantineRetentionDays} onChange={(v) => save({ quarantineRetentionDays: Math.max(1, Math.min(365, Math.round(v))) })} min={1} max={365} suffix="days" />
+            <NumberInput
+              value={settings.quarantineRetentionDays}
+              onChange={(v) => save({ quarantineRetentionDays: Math.max(1, Math.min(365, Math.round(v))) })}
+              min={1}
+              max={365}
+              suffix="days"
+            />
           </div>
-          <Toggle checked={settings.includeReviewItems} onChange={(v) => save({ includeReviewItems: v })} label="Include review items in bulk cleanup" description="Amber folders such as .venv/, Pods/ and vendor/. Off by default; you can also opt in per cleanup." />
+          <Toggle
+            checked={settings.includeReviewItems}
+            onChange={(v) => save({ includeReviewItems: v })}
+            label="Include review items in bulk cleanup"
+            description="Amber folders such as .venv/, Pods/ and vendor/. Off by default; you can also opt in per cleanup."
+          />
         </Section>
 
         <Section title="Rules">
@@ -303,10 +407,29 @@ export function SettingsPage() {
             )}
             <div className="grid grid-cols-[1fr_120px_110px_1fr_auto] gap-2">
               <TextInput value={ruleDraft.pattern} onChange={(v) => setRuleDraft({ ...ruleDraft, pattern: v })} placeholder=".storybook-cache" mono />
-              <Select<Stack | "any"> value={ruleDraft.stacks} onChange={(v) => setRuleDraft({ ...ruleDraft, stacks: v })} options={[{ value: "any", label: "All projects" }, ...(Object.keys(STACK_LABELS) as Stack[]).map((s) => ({ value: s, label: STACK_LABELS[s] }))]} />
-              <Select<"safe" | "review"> value={ruleDraft.safety} onChange={(v) => setRuleDraft({ ...ruleDraft, safety: v })} options={[{ value: "safe", label: "Safe" }, { value: "review", label: "Review" }]} />
+              <Select<Stack | "any">
+                value={ruleDraft.stacks}
+                onChange={(v) => setRuleDraft({ ...ruleDraft, stacks: v })}
+                options={[
+                  { value: "any", label: "All projects" },
+                  ...(Object.keys(STACK_LABELS) as Stack[]).map((s) => ({ value: s, label: STACK_LABELS[s] })),
+                ]}
+              />
+              <Select<"safe" | "review">
+                value={ruleDraft.safety}
+                onChange={(v) => setRuleDraft({ ...ruleDraft, safety: v })}
+                options={[
+                  { value: "safe", label: "Safe" },
+                  { value: "review", label: "Review" },
+                ]}
+              />
               <TextInput value={ruleDraft.explanation} onChange={(v) => setRuleDraft({ ...ruleDraft, explanation: v })} placeholder="Why is it safe?" />
-              <Button variant="outline" icon={<Plus size={13} />} onClick={addRule} disabled={!ruleDraft.pattern.trim() || PROTECTED_NAMES.includes(ruleDraft.pattern.trim())}>
+              <Button
+                variant="outline"
+                icon={<Plus size={13} />}
+                onClick={addRule}
+                disabled={!ruleDraft.pattern.trim() || PROTECTED_NAMES.includes(ruleDraft.pattern.trim())}
+              >
                 Add
               </Button>
             </div>
@@ -343,7 +466,11 @@ export function SettingsPage() {
           <div className="py-2">
             <div className="text-[13px] font-medium text-fg">Ignored folders</div>
             <div className="text-[12px] text-fg-muted">Absolute paths the scanner never enters.</div>
-            <ListEditor items={settings.ignoredPaths} onChange={(v) => save({ ignoredPaths: v })} placeholder={info?.platform === "windows" ? "C:\\Users\\me\\Projects\\archive" : "/home/me/Projects/archive"} />
+            <ListEditor
+              items={settings.ignoredPaths}
+              onChange={(v) => save({ ignoredPaths: v })}
+              placeholder={info?.platform === "windows" ? "C:\\Users\\me\\Projects\\archive" : "/home/me/Projects/archive"}
+            />
           </div>
         </Section>
 

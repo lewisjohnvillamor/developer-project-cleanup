@@ -1,0 +1,39 @@
+name: Bug report
+description: Something behaves wrongly (but nothing was deleted that should not have been).
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If a file or folder was removed that should not have been, **do not file it here**.
+        Use the private security report link instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you saw.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: |
+        In the app: Settings → Data → **Copy diagnostics**, then paste here.
+        CLI: `hibernate paths` and the command you ran.
+        Diagnostics contain version, platform, settings and scan warnings; no file contents or project names.
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Scanning, Sizes are wrong, Hibernate / removal, Wake, History / quarantine, Settings, UI, CLI, Build / install]
+    validations:
+      required: true
+  - type: input
+    id: stack
+    attributes:
+      label: Project stack involved, if any
+      placeholder: e.g. pnpm monorepo, Cargo workspace, Python + uv

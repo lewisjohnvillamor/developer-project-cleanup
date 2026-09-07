@@ -1,7 +1,6 @@
-import { ArrowRight, FolderPlus, Moon, Search, ShieldCheck, Sparkles } from "lucide-react";
+import { StatusBadge } from "@/components/common/Badge";
 import { Button } from "@/components/common/Button";
 import { Card } from "@/components/common/Card";
-import { StatusBadge } from "@/components/common/Badge";
 import { GlobalCaches } from "@/components/storage/GlobalCaches";
 import { RecentCleanup } from "@/components/storage/RecentCleanup";
 import { ReclaimTrend } from "@/components/storage/ReclaimTrend";
@@ -10,6 +9,7 @@ import { StorageSummary } from "@/components/storage/StorageSummary";
 import { useAppStore } from "@/stores/app-store";
 import { bulkEligible, primaryLabel } from "@/utils/filters";
 import { formatBytes, formatRelative, pluralize } from "@/utils/format";
+import { ArrowRight, FolderPlus, Moon, Search, ShieldCheck, Sparkles } from "lucide-react";
 
 function Welcome() {
   const roots = useAppStore((s) => s.settings.scanRoots);
@@ -30,8 +30,16 @@ function Welcome() {
         <ol className="mb-6 grid grid-cols-3 gap-3 text-[12.5px]">
           {[
             { icon: <Search size={15} />, title: "Scan", text: "Point at the folder where your projects live. Each repository is detected and measured." },
-            { icon: <Sparkles size={15} />, title: "Understand", text: "See what node_modules, target, .venv and build output cost per project, and why it is safe to remove." },
-            { icon: <ShieldCheck size={15} />, title: "Hibernate", text: "Review exactly what goes, then remove it to the Trash. Source, Git and lockfiles stay untouched." },
+            {
+              icon: <Sparkles size={15} />,
+              title: "Understand",
+              text: "See what node_modules, target, .venv and build output cost per project, and why it is safe to remove.",
+            },
+            {
+              icon: <ShieldCheck size={15} />,
+              title: "Hibernate",
+              text: "Review exactly what goes, then remove it to the Trash. Source, Git and lockfiles stay untouched.",
+            },
           ].map((s) => (
             <li key={s.title} className="rounded-lg border border-border bg-surface p-3">
               <div className="mb-1 flex items-center gap-1.5 font-semibold text-fg">
@@ -86,7 +94,8 @@ export function OverviewPage() {
         {dormant.length > 0 && (
           <div className="flex items-center justify-between rounded-lg border border-accent/30 bg-accent-soft/40 px-4 py-3">
             <div className="text-[13px] text-fg">
-              <span className="font-semibold">{pluralize(dormant.length, "dormant project")}</span> could free <span className="font-semibold tabular">{formatBytes(dormantBytes)}</span> without touching any source code.
+              <span className="font-semibold">{pluralize(dormant.length, "dormant project")}</span> could free{" "}
+              <span className="font-semibold tabular">{formatBytes(dormantBytes)}</span> without touching any source code.
             </div>
             <Button
               variant="primary"
@@ -152,7 +161,15 @@ export function OverviewPage() {
           {(["active", "dormant", "hibernated", "protected"] as const).map((status) => {
             const n = projects.filter((p) => p.status === status).length;
             return (
-              <button key={status} type="button" onClick={() => { useAppStore.getState().setFilters({ statuses: [status] }); setPage("projects"); }} className="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-2.5 text-left hover:bg-surface-2">
+              <button
+                key={status}
+                type="button"
+                onClick={() => {
+                  useAppStore.getState().setFilters({ statuses: [status] });
+                  setPage("projects");
+                }}
+                className="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-2.5 text-left hover:bg-surface-2"
+              >
                 <StatusBadge status={status} />
                 <span className="text-[16px] font-semibold tabular text-fg">{n}</span>
               </button>

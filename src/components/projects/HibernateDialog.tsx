@@ -1,11 +1,11 @@
-import { useState } from "react";
-import { AlertTriangle, Archive, Check, ChevronDown, ChevronRight, Loader2, ShieldCheck, X } from "lucide-react";
 import { Button } from "@/components/common/Button";
-import { Dialog } from "@/components/common/Dialog";
 import { Checkbox, ProgressBar, Toggle } from "@/components/common/Controls";
+import { Dialog } from "@/components/common/Dialog";
 import { useAppStore } from "@/stores/app-store";
 import { describeOutcome, outcomeIsError } from "@/types";
 import { formatBytes, formatCount, pluralize } from "@/utils/format";
+import { AlertTriangle, Archive, Check, ChevronDown, ChevronRight, Loader2, ShieldCheck, X } from "lucide-react";
+import { useState } from "react";
 
 const DISPOSITION_TEXT = {
   trash: "Removed folders go to the Recycle Bin / Trash.",
@@ -54,7 +54,13 @@ export function HibernateDialog() {
             <Button variant="outline" onClick={() => setShowFiles((v) => !v)} disabled={!plan}>
               {showFiles ? "Hide files" : "Review files"}
             </Button>
-            <Button variant="primary" icon={<Archive size={14} />} onClick={confirm} disabled={!plan || plan.projects.every((p) => p.artifacts.length === 0) || h.planLoading} loading={h.planLoading}>
+            <Button
+              variant="primary"
+              icon={<Archive size={14} />}
+              onClick={confirm}
+              disabled={!plan || plan.projects.every((p) => p.artifacts.length === 0) || h.planLoading}
+              loading={h.planLoading}
+            >
               Hibernate {n ? pluralize(n, "project") : ""}
             </Button>
           </>
@@ -129,9 +135,16 @@ export function HibernateDialog() {
                       ))}
                       {p.skippedReview.map((a) => (
                         <div key={a.path} className="flex items-center gap-2 text-fg-subtle">
-                          <Checkbox checked={false} onChange={() => toggleReviewArtifact(p.id, a.path)} disabled={h.planLoading} title="Include this review folder" />
+                          <Checkbox
+                            checked={false}
+                            onChange={() => toggleReviewArtifact(p.id, a.path)}
+                            disabled={h.planLoading}
+                            title="Include this review folder"
+                          />
                           <span className="flex-1 font-mono">{a.relativePath}</span>
-                          <span className="tabular">{formatBytes(a.bytes)} · <span className="text-review">needs review</span>, left in place</span>
+                          <span className="tabular">
+                            {formatBytes(a.bytes)} · <span className="text-review">needs review</span>, left in place
+                          </span>
                         </div>
                       ))}
                       {(() => {
@@ -141,7 +154,12 @@ export function HibernateDialog() {
                         const rest = original?.artifacts.filter((a) => !shown.has(a.path) && a.safety !== "protected") ?? [];
                         return rest.map((a) => (
                           <div key={a.path} className="flex items-center gap-2 text-fg-subtle">
-                            <Checkbox checked={false} onChange={() => toggleReviewArtifact(p.id, a.path)} disabled={h.planLoading} title="Include this folder" />
+                            <Checkbox
+                              checked={false}
+                              onChange={() => toggleReviewArtifact(p.id, a.path)}
+                              disabled={h.planLoading}
+                              title="Include this folder"
+                            />
                             <span className="flex-1 font-mono">{a.relativePath}</span>
                             <span className="tabular">{formatBytes(a.bytes)} · left in place</span>
                           </div>
@@ -158,7 +176,9 @@ export function HibernateDialog() {
                 </li>
               ))}
             </ul>
-            <p className="text-[12px] text-fg-subtle">Expand a project to untick individual folders. Projects remain usable after reinstalling dependencies. Use Wake to bring them back.</p>
+            <p className="text-[12px] text-fg-subtle">
+              Expand a project to untick individual folders. Projects remain usable after reinstalling dependencies. Use Wake to bring them back.
+            </p>
           </div>
         )}
       </Dialog>
@@ -169,7 +189,19 @@ export function HibernateDialog() {
   if (h.stage === "running") {
     const progress = h.total ? h.completed / h.total : null;
     return (
-      <Dialog open onClose={() => {}} closable={false} title="Hibernate Projects" subtitle={`${h.completed} / ${h.total} completed`} width="max-w-xl" footer={<Button variant="outline" icon={<X size={14} />} onClick={cancel}>Cancel after current folder</Button>}>
+      <Dialog
+        open
+        onClose={() => {}}
+        closable={false}
+        title="Hibernate Projects"
+        subtitle={`${h.completed} / ${h.total} completed`}
+        width="max-w-xl"
+        footer={
+          <Button variant="outline" icon={<X size={14} />} onClick={cancel}>
+            Cancel after current folder
+          </Button>
+        }
+      >
         <div className="flex flex-col gap-4">
           <div>
             <div className="mb-1.5 flex items-center justify-between text-[12.5px]">
@@ -187,7 +219,11 @@ export function HibernateDialog() {
                 <li key={id} className="px-3 py-2 text-[12.5px]">
                   <div className="flex items-center gap-2">
                     {pp.done ? (
-                      pp.errorCount ? <AlertTriangle size={14} className="text-review" /> : <Check size={14} className="text-safe" />
+                      pp.errorCount ? (
+                        <AlertTriangle size={14} className="text-review" />
+                      ) : (
+                        <Check size={14} className="text-safe" />
+                      )
                     ) : current ? (
                       <Loader2 size={14} className="animate-spin text-accent" />
                     ) : (
@@ -232,10 +268,22 @@ export function HibernateDialog() {
       width="max-w-xl"
       footer={
         <>
-          <Button variant="ghost" onClick={() => { close(); setPage("history"); }}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              close();
+              setPage("history");
+            }}
+          >
             View History
           </Button>
-          <Button variant="ghost" onClick={() => { close(); setPage("projects"); }}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              close();
+              setPage("projects");
+            }}
+          >
             Open Projects
           </Button>
           <Button variant="primary" onClick={close}>
@@ -285,7 +333,11 @@ export function HibernateDialog() {
                 {failures.slice(0, 8).map(({ project, a }) => (
                   <li key={a.path}>
                     <span className="text-fg">{project}</span> <span className="font-mono">{a.relativePath}</span> — {describeOutcome(a.outcome)}
-                    {a.outcome.kind === "partiallyDeleted" && a.outcome.failed[0] && <div className="ml-3 truncate font-mono text-[11px] text-fg-subtle">{a.outcome.failed[0].path}: {a.outcome.failed[0].error}</div>}
+                    {a.outcome.kind === "partiallyDeleted" && a.outcome.failed[0] && (
+                      <div className="ml-3 truncate font-mono text-[11px] text-fg-subtle">
+                        {a.outcome.failed[0].path}: {a.outcome.failed[0].error}
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>

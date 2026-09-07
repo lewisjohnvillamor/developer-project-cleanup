@@ -2,11 +2,10 @@
 // progressive scan, a hibernate run and a wake run with realistic timing so
 // every screen can be exercised without the Rust engine.
 
-import type { Backend, Unlisten } from "./backend";
 import {
-  DEFAULT_SETTINGS,
   type ArtifactCategory,
   type CleanupArtifact,
+  DEFAULT_SETTINGS,
   type GitState,
   type HibernateEvent,
   type HibernatePlan,
@@ -16,8 +15,8 @@ import {
   type PlannedProject,
   type Project,
   type QuarantineBatch,
-  type ScanRecord,
   type ScanEvent,
+  type ScanRecord,
   type ScanSnapshot,
   type ScanSummary,
   type Settings,
@@ -25,6 +24,7 @@ import {
   type WakeEvent,
   type WakePlan,
 } from "@/types";
+import type { Backend, Unlisten } from "./backend";
 
 type Handler<T> = (payload: T) => void;
 
@@ -50,19 +50,64 @@ function rng(seed: number) {
 }
 
 const NAMES = [
-  ["LogParser", "rust"], ["OldDashboard", "node"], ["HomeCloud", "node"], ["Pointsy", "rust"], ["BrowserSnaps", "node"],
-  ["purple-rally", "node"], ["ml-experiments", "python"], ["invoice-bot", "python"], ["gopher-api", "go"], ["ledger-ui", "node"],
-  ["photo-sync", "rust"], ["recipe-box", "node"], ["chat-relay", "node"], ["kanban-lite", "node"], ["weather-cli", "rust"],
-  ["scraper-farm", "python"], ["auth-service", "go"], ["blog-2022", "node"], ["portfolio", "node"], ["dotfiles-manager", "rust"],
-  ["timer-app", "dart"], ["android-notes", "gradle"], ["ios-widgets", "cocoapods"], ["shop-backend", "dotnet"], ["metrics-worker", "python"],
-  ["design-system", "node"], ["docs-site", "node"], ["game-jam-2023", "rust"], ["bench-harness", "rust"], ["email-templates", "node"],
-  ["pdf-tools", "python"], ["mobile-shell", "node"], ["ci-scripts", "node"], ["queue-sim", "go"], ["sql-explorer", "node"],
-  ["rss-reader", "rust"], ["voice-memo", "dart"], ["ledger-api", "ruby"], ["laravel-crm", "php"], ["maven-legacy", "maven"],
-  ["tiny-editor", "node"], ["neural-toys", "python"], ["ws-gateway", "node"], ["cargo-plugin", "rust"], ["gradle-lib", "gradle"],
+  ["LogParser", "rust"],
+  ["OldDashboard", "node"],
+  ["HomeCloud", "node"],
+  ["Pointsy", "rust"],
+  ["BrowserSnaps", "node"],
+  ["purple-rally", "node"],
+  ["ml-experiments", "python"],
+  ["invoice-bot", "python"],
+  ["gopher-api", "go"],
+  ["ledger-ui", "node"],
+  ["photo-sync", "rust"],
+  ["recipe-box", "node"],
+  ["chat-relay", "node"],
+  ["kanban-lite", "node"],
+  ["weather-cli", "rust"],
+  ["scraper-farm", "python"],
+  ["auth-service", "go"],
+  ["blog-2022", "node"],
+  ["portfolio", "node"],
+  ["dotfiles-manager", "rust"],
+  ["timer-app", "dart"],
+  ["android-notes", "gradle"],
+  ["ios-widgets", "cocoapods"],
+  ["shop-backend", "dotnet"],
+  ["metrics-worker", "python"],
+  ["design-system", "node"],
+  ["docs-site", "node"],
+  ["game-jam-2023", "rust"],
+  ["bench-harness", "rust"],
+  ["email-templates", "node"],
+  ["pdf-tools", "python"],
+  ["mobile-shell", "node"],
+  ["ci-scripts", "node"],
+  ["queue-sim", "go"],
+  ["sql-explorer", "node"],
+  ["rss-reader", "rust"],
+  ["voice-memo", "dart"],
+  ["ledger-api", "ruby"],
+  ["laravel-crm", "php"],
+  ["maven-legacy", "maven"],
+  ["tiny-editor", "node"],
+  ["neural-toys", "python"],
+  ["ws-gateway", "node"],
+  ["cargo-plugin", "rust"],
+  ["gradle-lib", "gradle"],
 ] as const;
 
 const FRAMEWORKS: Record<string, string[][]> = {
-  node: [["Next.js", "React", "TypeScript"], ["Vite", "React", "TypeScript"], ["Express", "TypeScript"], ["Nuxt", "Vue"], ["Astro"], ["Electron", "TypeScript"], ["TypeScript"], []],
+  node: [
+    ["Next.js", "React", "TypeScript"],
+    ["Vite", "React", "TypeScript"],
+    ["Express", "TypeScript"],
+    ["Nuxt", "Vue"],
+    ["Astro"],
+    ["Electron", "TypeScript"],
+    ["TypeScript"],
+    [],
+  ],
   rust: [[], ["Tauri"]],
   python: [[]],
   go: [[]],
@@ -76,7 +121,15 @@ const FRAMEWORKS: Record<string, string[][]> = {
 };
 
 function artifactsFor(stack: Stack, size: number, r: () => number, path: string, pm: string | null): CleanupArtifact[] {
-  const mk = (rel: string, kind: string, category: ArtifactCategory, bytes: number, safety: "safe" | "review", explanation: string, restoreHint: string | null): CleanupArtifact => ({
+  const mk = (
+    rel: string,
+    kind: string,
+    category: ArtifactCategory,
+    bytes: number,
+    safety: "safe" | "review",
+    explanation: string,
+    restoreHint: string | null,
+  ): CleanupArtifact => ({
     path: `${path}/${rel.replace(/\/$/, "")}`,
     relativePath: rel,
     kind,
@@ -92,33 +145,129 @@ function artifactsFor(stack: Stack, size: number, r: () => number, path: string,
   const out: CleanupArtifact[] = [];
   switch (stack) {
     case "node":
-      out.push(mk("node_modules/", "node_modules", "nodeDependencies", size * (0.6 + r() * 0.3), "safe", "Installed packages generated from the lockfile.", pm === "pnpm" ? "pnpm install --frozen-lockfile" : pm === "yarn" ? "yarn install --immutable" : "npm ci"));
-      if (r() > 0.4) out.push(mk(".next/", "next", "buildArtifacts", size * 0.08 * r(), "safe", "Next.js build output and cache, rebuilt by `next build` or `next dev`.", "npx next build"));
-      if (r() > 0.5) out.push(mk("dist/", "dist", "buildArtifacts", size * 0.02 * r(), "safe", "Compiled output produced by the project's build step.", "run the project's build script"));
-      if (r() > 0.6) out.push(mk("coverage/", "coverage", "buildArtifacts", size * 0.01 * r(), "safe", "Test coverage reports, regenerated by running the test suite with coverage.", null));
+      out.push(
+        mk(
+          "node_modules/",
+          "node_modules",
+          "nodeDependencies",
+          size * (0.6 + r() * 0.3),
+          "safe",
+          "Installed packages generated from the lockfile.",
+          pm === "pnpm" ? "pnpm install --frozen-lockfile" : pm === "yarn" ? "yarn install --immutable" : "npm ci",
+        ),
+      );
+      if (r() > 0.4)
+        out.push(
+          mk(
+            ".next/",
+            "next",
+            "buildArtifacts",
+            size * 0.08 * r(),
+            "safe",
+            "Next.js build output and cache, rebuilt by `next build` or `next dev`.",
+            "npx next build",
+          ),
+        );
+      if (r() > 0.5)
+        out.push(
+          mk(
+            "dist/",
+            "dist",
+            "buildArtifacts",
+            size * 0.02 * r(),
+            "safe",
+            "Compiled output produced by the project's build step.",
+            "run the project's build script",
+          ),
+        );
+      if (r() > 0.6)
+        out.push(
+          mk(
+            "coverage/",
+            "coverage",
+            "buildArtifacts",
+            size * 0.01 * r(),
+            "safe",
+            "Test coverage reports, regenerated by running the test suite with coverage.",
+            null,
+          ),
+        );
       if (r() > 0.7) out.push(mk(".turbo/", "turbo", "caches", size * 0.01 * r(), "safe", "Turborepo task cache.", null));
       break;
     case "rust":
-      out.push(mk("target/", "rust-target", "rustTarget", size * (0.85 + r() * 0.1), "safe", "Cargo build directory with compiled dependencies and incremental caches.", "cargo build"));
+      out.push(
+        mk(
+          "target/",
+          "rust-target",
+          "rustTarget",
+          size * (0.85 + r() * 0.1),
+          "safe",
+          "Cargo build directory with compiled dependencies and incremental caches.",
+          "cargo build",
+        ),
+      );
       break;
     case "python":
-      out.push(mk(".venv/", "venv", "pythonEnvironments", size * (0.7 + r() * 0.2), "review", "Virtual environment. Regeneratable from requirements, but may contain packages installed by hand.", "python -m venv .venv && pip install -r requirements.txt"));
+      out.push(
+        mk(
+          ".venv/",
+          "venv",
+          "pythonEnvironments",
+          size * (0.7 + r() * 0.2),
+          "review",
+          "Virtual environment. Regeneratable from requirements, but may contain packages installed by hand.",
+          "python -m venv .venv && pip install -r requirements.txt",
+        ),
+      );
       out.push(mk("__pycache__/", "pycache", "caches", size * 0.005, "safe", "Compiled Python bytecode, recreated automatically on import.", null));
       if (r() > 0.5) out.push(mk(".pytest_cache/", "pytest-cache", "caches", size * 0.001, "safe", "pytest cache directory.", null));
       break;
     case "go":
-      if (r() > 0.5) out.push(mk("vendor/", "vendor", "other", size * 0.5, "review", "Vendored dependencies. Regenerated by `go mod vendor`, but some projects commit patches here.", null));
+      if (r() > 0.5)
+        out.push(
+          mk(
+            "vendor/",
+            "vendor",
+            "other",
+            size * 0.5,
+            "review",
+            "Vendored dependencies. Regenerated by `go mod vendor`, but some projects commit patches here.",
+            null,
+          ),
+        );
       break;
     case "dart":
-      out.push(mk("build/", "build", "buildArtifacts", size * 0.6, "safe", "Build output produced by the project's build step.", "run the project's build script"));
+      out.push(
+        mk("build/", "build", "buildArtifacts", size * 0.6, "safe", "Build output produced by the project's build step.", "run the project's build script"),
+      );
       out.push(mk(".dart_tool/", "dart-tool", "caches", size * 0.1, "safe", "Dart / Flutter tooling cache, recreated by `pub get`.", "flutter pub get"));
       break;
     case "gradle":
       out.push(mk("build/", "build", "buildArtifacts", size * 0.5, "safe", "Build output produced by the project's build step.", null));
-      out.push(mk(".gradle/", "gradle-cache", "caches", size * 0.2, "review", "Project-local Gradle cache. Regenerated on the next build, but may hold wrapper distributions.", null));
+      out.push(
+        mk(
+          ".gradle/",
+          "gradle-cache",
+          "caches",
+          size * 0.2,
+          "review",
+          "Project-local Gradle cache. Regenerated on the next build, but may hold wrapper distributions.",
+          null,
+        ),
+      );
       break;
     case "cocoapods":
-      out.push(mk("Pods/", "pods", "other", size * 0.7, "review", "CocoaPods dependencies, reinstalled by `pod install`. Some teams commit this directory on purpose.", "pod install"));
+      out.push(
+        mk(
+          "Pods/",
+          "pods",
+          "other",
+          size * 0.7,
+          "review",
+          "CocoaPods dependencies, reinstalled by `pod install`. Some teams commit this directory on purpose.",
+          "pod install",
+        ),
+      );
       break;
     case "dotnet":
       out.push(mk("bin/", "dotnet-bin", "buildArtifacts", size * 0.3, "safe", "MSBuild output directory, rebuilt by `dotnet build`.", "dotnet build"));
@@ -137,7 +286,20 @@ function artifactsFor(stack: Stack, size: number, r: () => number, path: string,
 
 function makeProjects(root: string, now: number): Project[] {
   const r = rng(42);
-  return NAMES.map(([name, stack], i) => {
+  // `?projects=3000` in the URL stress-tests the table with generated names.
+  let wanted: number = NAMES.length;
+  try {
+    const q = new URLSearchParams(window.location.search).get("projects");
+    if (q) wanted = Math.max(NAMES.length, Math.min(20000, Number(q) || 0));
+  } catch {
+    /* not in a browser */
+  }
+  const names: (readonly [string, Stack])[] = [...NAMES];
+  for (let i = NAMES.length; i < wanted; i++) {
+    const base = NAMES[i % NAMES.length]!;
+    names.push([`${base[0]}-${Math.floor(i / NAMES.length)}`, base[1]] as const);
+  }
+  return names.map(([name, stack], i) => {
     const size = Math.round((0.05 + r() ** 2 * 12) * 1e9);
     const path = `${root}/${name}`;
     const pm = stack === "node" ? (["pnpm", "npm", "yarn"][i % 3] ?? "npm") : stack === "python" ? "pip" : null;
@@ -192,7 +354,10 @@ function makeProjects(root: string, now: number): Project[] {
       safety: blocking ? "review" : "safe",
       safetyReasons: reasons,
       artifacts,
-      protectedEntries: stack === "node" ? [".env", ".git/", "package.json", "pnpm-lock.yaml", "public/", "README.md", "src/"] : [".git/", "Cargo.lock", "Cargo.toml", "README.md", "src/"],
+      protectedEntries:
+        stack === "node"
+          ? [".env", ".git/", "package.json", "pnpm-lock.yaml", "public/", "README.md", "src/"]
+          : [".git/", "Cargo.lock", "Cargo.toml", "README.md", "src/"],
       protected: protectedFlag,
       ignoredUntil: null,
       hibernation: null,
@@ -247,7 +412,14 @@ export function createMockBackend(): Backend {
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (raw) {
-      const saved = JSON.parse(raw) as { settings?: Settings; projects?: Project[]; summary?: ScanSummary; scannedAt?: string; history?: HistoryEntry[]; trend?: ScanRecord[] };
+      const saved = JSON.parse(raw) as {
+        settings?: Settings;
+        projects?: Project[];
+        summary?: ScanSummary;
+        scannedAt?: string;
+        history?: HistoryEntry[];
+        trend?: ScanRecord[];
+      };
       trend = saved.trend ?? [];
       settings = { ...DEFAULT_SETTINGS, ...(saved.settings ?? {}) };
       projects = saved.projects ?? [];
@@ -293,8 +465,18 @@ export function createMockBackend(): Backend {
           chosen.push(a);
         } else if (a.safety === "review") skippedReview.push(a);
       }
-      const warnings = p.git?.state === "modified" || p.git?.state === "untracked" ? ["This project contains uncommitted changes. Only generated folders are removed."] : [];
-      planned.push({ id: p.id, name: p.name, path: p.path, totalBytes: p.totalBytes, artifacts: chosen, bytes: chosen.reduce((s, a) => s + a.bytes, 0), skippedReview, warnings });
+      const warnings =
+        p.git?.state === "modified" || p.git?.state === "untracked" ? ["This project contains uncommitted changes. Only generated folders are removed."] : [];
+      planned.push({
+        id: p.id,
+        name: p.name,
+        path: p.path,
+        totalBytes: p.totalBytes,
+        artifacts: chosen,
+        bytes: chosen.reduce((s, a) => s + a.bytes, 0),
+        skippedReview,
+        warnings,
+      });
     }
     planned.sort((a, b) => b.bytes - a.bytes);
     return {
@@ -319,7 +501,11 @@ export function createMockBackend(): Backend {
       } else if (s === "rust") steps.push({ program: "cargo", args: ["build"], display: "cargo build" });
       else if (s === "python") {
         steps.push({ program: "python3", args: ["-m", "venv", ".venv"], display: "python3 -m venv .venv" });
-        steps.push({ program: ".venv/bin/python", args: ["-m", "pip", "install", "-r", "requirements.txt"], display: ".venv/bin/python -m pip install -r requirements.txt" });
+        steps.push({
+          program: ".venv/bin/python",
+          args: ["-m", "pip", "install", "-r", "requirements.txt"],
+          display: ".venv/bin/python -m pip install -r requirements.txt",
+        });
       } else if (s === "go") steps.push({ program: "go", args: ["mod", "download"], display: "go mod download" });
       else if (s === "dart") steps.push({ program: "flutter", args: ["pub", "get"], display: "flutter pub get" });
       else if (s === "gradle") steps.push({ program: "./gradlew", args: ["build", "-x", "test"], display: "./gradlew build -x test" });
@@ -330,13 +516,30 @@ export function createMockBackend(): Backend {
       else if (s === "maven") steps.push({ program: "mvn", args: ["-q", "package", "-DskipTests"], display: "mvn -q package -DskipTests" });
     }
     if (!steps.length) return null;
-    return { projectId: p.id, cwd: p.path, packageManager: p.packageManager, steps, notes: ["Commands run inside the project folder and nothing else."], missingTools: p.stacks.includes("dart") ? ["flutter"] : [] };
+    return {
+      projectId: p.id,
+      cwd: p.path,
+      packageManager: p.packageManager,
+      steps,
+      notes: ["Commands run inside the project folder and nothing else."],
+      missingTools: p.stacks.includes("dart") ? ["flutter"] : [],
+    };
   };
 
   return {
     kind: "mock",
     async getAppInfo() {
-      return { version: "0.1.0 (browser preview)", platform: "browser", dataDir: "~/.local/share/ProjectHibernate", quarantineDir: "~/.local/share/ProjectHibernate/quarantine", quarantineBytes: 0, gitAvailable: true, trashAvailable: true, trashRestoreSupported: true, homeDir: "/home/dev" };
+      return {
+        version: "0.1.0 (browser preview)",
+        platform: "browser",
+        dataDir: "~/.local/share/ProjectHibernate",
+        quarantineDir: "~/.local/share/ProjectHibernate/quarantine",
+        quarantineBytes: 0,
+        gitAvailable: true,
+        trashAvailable: true,
+        trashRestoreSupported: true,
+        homeDir: "/home/dev",
+      };
     },
     async getSettings() {
       return settings;
@@ -405,10 +608,22 @@ export function createMockBackend(): Backend {
         if (trend.length === 0) {
           // Seed a little history so the trend chart has something to show.
           for (let d = 6; d >= 1; d--) {
-            trend.push({ at: new Date(Date.now() - d * 86_400_000).toISOString(), projectCount: projects.length, totalBytes: summary.totalBytes * (1 + d * 0.02), reclaimableBytes: summary.reclaimableBytes * (1 + d * 0.05), reviewBytes: summary.reviewBytes });
+            trend.push({
+              at: new Date(Date.now() - d * 86_400_000).toISOString(),
+              projectCount: projects.length,
+              totalBytes: summary.totalBytes * (1 + d * 0.02),
+              reclaimableBytes: summary.reclaimableBytes * (1 + d * 0.05),
+              reviewBytes: summary.reviewBytes,
+            });
           }
         }
-        trend.push({ at: scannedAt, projectCount: projects.length, totalBytes: summary.totalBytes, reclaimableBytes: summary.reclaimableBytes, reviewBytes: summary.reviewBytes });
+        trend.push({
+          at: scannedAt,
+          projectCount: projects.length,
+          totalBytes: summary.totalBytes,
+          reclaimableBytes: summary.reclaimableBytes,
+          reviewBytes: summary.reviewBytes,
+        });
         persist();
         if (cancelScan) scanEvents.emit({ type: "cancelled", scanned: projects.length, discovered: fresh.length });
         else scanEvents.emit({ type: "finished", summary });
@@ -429,7 +644,13 @@ export function createMockBackend(): Backend {
     async setProtected(id, flag) {
       const p = find(id);
       p.protected = flag;
-      p.status = flag ? "protected" : p.hibernation ? "hibernated" : (Date.now() - Date.parse(p.lastActivityAt ?? "0")) / 86_400_000 < settings.dormantAfterDays ? "active" : "dormant";
+      p.status = flag
+        ? "protected"
+        : p.hibernation
+          ? "hibernated"
+          : (Date.now() - Date.parse(p.lastActivityAt ?? "0")) / 86_400_000 < settings.dormantAfterDays
+            ? "active"
+            : "dormant";
       persist();
       return { ...p };
     },
@@ -465,17 +686,33 @@ export function createMockBackend(): Backend {
           const pp = pl.projects[i]!;
           if (cancelHib) break;
           hibEvents.emit({ type: "projectStarted", projectId: pp.id, name: pp.name, index: i });
-          const hp: HistoryProject = { projectId: pp.id, name: pp.name, path: pp.path, previousBytes: pp.totalBytes, bytesRecovered: 0, artifacts: [], errorCount: 0 };
+          const hp: HistoryProject = {
+            projectId: pp.id,
+            name: pp.name,
+            path: pp.path,
+            previousBytes: pp.totalBytes,
+            bytesRecovered: 0,
+            artifacts: [],
+            errorCount: 0,
+          };
           for (const a of pp.artifacts) {
             hibEvents.emit({ type: "artifactStarted", projectId: pp.id, relativePath: a.relativePath, bytes: a.bytes });
             await sleep(150 + Math.min(900, a.bytes / 4e6));
             const fail = a.relativePath === "coverage/" && Math.random() < 0.3;
             const outcome = fail
-              ? { kind: "partiallyDeleted" as const, failed: [{ path: `${a.path}/lcov-report/index.html`, error: "The process cannot access the file because it is being used by another process." }] }
+              ? {
+                  kind: "partiallyDeleted" as const,
+                  failed: [
+                    { path: `${a.path}/lcov-report/index.html`, error: "The process cannot access the file because it is being used by another process." },
+                  ],
+                }
               : pl.disposition === "trash"
                 ? { kind: "trashed" as const }
                 : pl.disposition === "quarantine"
-                  ? { kind: "quarantined" as const, quarantinePath: `~/.local/share/ProjectHibernate/quarantine/${startedAt.slice(0, 10)}/${entryId}/${pp.name}/${a.relativePath}` }
+                  ? {
+                      kind: "quarantined" as const,
+                      quarantinePath: `~/.local/share/ProjectHibernate/quarantine/${startedAt.slice(0, 10)}/${entryId}/${pp.name}/${a.relativePath}`,
+                    }
                   : { kind: "deleted" as const };
             const recovered = fail ? Math.round(a.bytes * 0.9) : a.bytes;
             if (fail) hp.errorCount++;
@@ -492,16 +729,46 @@ export function createMockBackend(): Backend {
             real.totalBytes = Math.max(0, real.totalBytes - hp.bytesRecovered);
             real.reclaimableBytes = real.artifacts.filter((x) => x.safety === "safe").reduce((s, x) => s + x.bytes, 0);
             real.reviewBytes = real.artifacts.filter((x) => x.safety === "review").reduce((s, x) => s + x.bytes, 0);
-            real.hibernation = { hibernatedAt: new Date().toISOString(), previousBytes: hp.previousBytes, savedBytes: hp.bytesRecovered, historyEntryId: entryId };
+            real.hibernation = {
+              hibernatedAt: new Date().toISOString(),
+              previousBytes: hp.previousBytes,
+              savedBytes: hp.bytesRecovered,
+              historyEntryId: entryId,
+            };
             if (real.reclaimableBytes < 1_000_000) real.status = "hibernated";
             changed.push({ ...real });
           }
-          hibEvents.emit({ type: "projectFinished", projectId: pp.id, name: pp.name, bytesRecovered: hp.bytesRecovered, errorCount: hp.errorCount, completed: i + 1, total: pl.projects.length, totalRecovered });
+          hibEvents.emit({
+            type: "projectFinished",
+            projectId: pp.id,
+            name: pp.name,
+            bytesRecovered: hp.bytesRecovered,
+            errorCount: hp.errorCount,
+            completed: i + 1,
+            total: pl.projects.length,
+            totalRecovered,
+          });
         }
-        const entry: HistoryEntry = { id: entryId, startedAt, finishedAt: new Date().toISOString(), disposition: pl.disposition, projects: hps, totalRecovered, projectCount: hps.length, errorCount: hps.reduce((s, p) => s + p.errorCount, 0), cancelled: cancelHib, restoredAt: null };
+        const entry: HistoryEntry = {
+          id: entryId,
+          startedAt,
+          finishedAt: new Date().toISOString(),
+          disposition: pl.disposition,
+          projects: hps,
+          totalRecovered,
+          projectCount: hps.length,
+          errorCount: hps.reduce((s, p) => s + p.errorCount, 0),
+          cancelled: cancelHib,
+          restoredAt: null,
+        };
         history.unshift(entry);
         if (summary) {
-          summary = { ...summary, totalBytes: projects.reduce((s, p) => s + p.totalBytes, 0), reclaimableBytes: projects.reduce((s, p) => s + p.reclaimableBytes, 0), reviewBytes: projects.reduce((s, p) => s + p.reviewBytes, 0) };
+          summary = {
+            ...summary,
+            totalBytes: projects.reduce((s, p) => s + p.totalBytes, 0),
+            reclaimableBytes: projects.reduce((s, p) => s + p.reclaimableBytes, 0),
+            reviewBytes: projects.reduce((s, p) => s + p.reviewBytes, 0),
+          };
         }
         persist();
         updates.emit(changed);
@@ -554,7 +821,16 @@ export function createMockBackend(): Backend {
         for (let i = 0; i < pl.steps.length; i++) {
           const step = pl.steps[i]!;
           wakeEvents.emit({ type: "stepStarted", projectId: id, stepIndex: i, display: step.display });
-          const lines = ["Resolving packages...", "Progress: resolved 641, reused 640, downloaded 1, added 642", "", "dependencies:", "+ next 14.2.3", "+ react 18.3.1", "", "Done in 3.4s"];
+          const lines = [
+            "Resolving packages...",
+            "Progress: resolved 641, reused 640, downloaded 1, added 642",
+            "",
+            "dependencies:",
+            "+ next 14.2.3",
+            "+ react 18.3.1",
+            "",
+            "Done in 3.4s",
+          ];
           for (const l of lines) {
             if (cancelWake) break;
             await sleep(180);
@@ -570,7 +846,13 @@ export function createMockBackend(): Backend {
           persist();
           updates.emit([{ ...p }]);
         }
-        wakeEvents.emit({ type: "finished", projectId: id, success: !cancelWake, durationMs: performance.now() - t0, message: cancelWake ? "Cancelled" : `Completed in ${((performance.now() - t0) / 1000).toFixed(1)} seconds.` });
+        wakeEvents.emit({
+          type: "finished",
+          projectId: id,
+          success: !cancelWake,
+          durationMs: performance.now() - t0,
+          message: cancelWake ? "Cancelled" : `Completed in ${((performance.now() - t0) / 1000).toFixed(1)} seconds.`,
+        });
       })();
       return pl;
     },
@@ -592,11 +874,56 @@ export function createMockBackend(): Backend {
     async getGlobalCaches() {
       await sleep(600);
       return [
-        { id: "cargo-registry", label: "Cargo registry", path: "~/.cargo/registry", exists: true, bytes: 6_400_000_000, fileCount: 412_000, cleanCommand: "cargo cache --autoclean", note: "Downloaded crate sources. Re-fetched on demand." },
-        { id: "pnpm-store", label: "pnpm store", path: "~/.local/share/pnpm/store", exists: true, bytes: 4_100_000_000, fileCount: 980_000, cleanCommand: "pnpm store prune", note: "Hard-linked package store. Pruning removes packages no project references." },
-        { id: "npm-cache", label: "npm cache", path: "~/.npm/_cacache", exists: true, bytes: 2_300_000_000, fileCount: 120_000, cleanCommand: "npm cache clean --force", note: "Content-addressed tarball cache shared by every Node project." },
-        { id: "pip-cache", label: "pip cache", path: "~/.cache/pip", exists: true, bytes: 900_000_000, fileCount: 8_000, cleanCommand: "pip cache purge", note: "Wheels and HTTP responses cached by pip." },
-        { id: "go-mod", label: "Go module cache", path: "~/go/pkg/mod", exists: false, bytes: 0, fileCount: 0, cleanCommand: "go clean -modcache", note: "Downloaded Go modules." },
+        {
+          id: "cargo-registry",
+          label: "Cargo registry",
+          path: "~/.cargo/registry",
+          exists: true,
+          bytes: 6_400_000_000,
+          fileCount: 412_000,
+          cleanCommand: "cargo cache --autoclean",
+          note: "Downloaded crate sources. Re-fetched on demand.",
+        },
+        {
+          id: "pnpm-store",
+          label: "pnpm store",
+          path: "~/.local/share/pnpm/store",
+          exists: true,
+          bytes: 4_100_000_000,
+          fileCount: 980_000,
+          cleanCommand: "pnpm store prune",
+          note: "Hard-linked package store. Pruning removes packages no project references.",
+        },
+        {
+          id: "npm-cache",
+          label: "npm cache",
+          path: "~/.npm/_cacache",
+          exists: true,
+          bytes: 2_300_000_000,
+          fileCount: 120_000,
+          cleanCommand: "npm cache clean --force",
+          note: "Content-addressed tarball cache shared by every Node project.",
+        },
+        {
+          id: "pip-cache",
+          label: "pip cache",
+          path: "~/.cache/pip",
+          exists: true,
+          bytes: 900_000_000,
+          fileCount: 8_000,
+          cleanCommand: "pip cache purge",
+          note: "Wheels and HTTP responses cached by pip.",
+        },
+        {
+          id: "go-mod",
+          label: "Go module cache",
+          path: "~/go/pkg/mod",
+          exists: false,
+          bytes: 0,
+          fileCount: 0,
+          cleanCommand: "go clean -modcache",
+          note: "Downloaded Go modules.",
+        },
       ];
     },
     async previewRule(pattern, ecosystems) {
@@ -605,10 +932,19 @@ export function createMockBackend(): Backend {
       return projects
         .filter((p) => !ecosystems.length || p.stacks.some((s) => ecosystems.includes(s)))
         .slice(0, 6)
-        .map((p, i) => ({ projectName: p.name, projectPath: p.path, path: `${p.path}/${pattern}`, relativePath: `${pattern}/`, bytes: Math.round((i + 1) * 37_000_000), fileCount: (i + 1) * 120 }));
+        .map((p, i) => ({
+          projectName: p.name,
+          projectPath: p.path,
+          path: `${p.path}/${pattern}`,
+          relativePath: `${pattern}/`,
+          bytes: Math.round((i + 1) * 37_000_000),
+          fileCount: (i + 1) * 120,
+        }));
     },
     async exportProjects(format) {
-      const blob = new Blob([format === "csv" ? "name,path\n" + projects.map((p) => `${p.name},${p.path}`).join("\n") : JSON.stringify(projects, null, 2)], { type: "text/plain" });
+      const blob = new Blob([format === "csv" ? "name,path\n" + projects.map((p) => `${p.name},${p.path}`).join("\n") : JSON.stringify(projects, null, 2)], {
+        type: "text/plain",
+      });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -620,7 +956,14 @@ export function createMockBackend(): Backend {
     async listQuarantine(): Promise<QuarantineBatch[]> {
       return history
         .filter((e) => e.disposition === "quarantine" && e.restoredAt === null)
-        .map((e) => ({ entryId: e.id, date: e.finishedAt.slice(0, 10), path: `~/.local/share/ProjectHibernate/quarantine/${e.finishedAt.slice(0, 10)}/${e.id}`, bytes: e.totalRecovered, fileCount: 1000, projects: e.projects.map((p) => p.name) }));
+        .map((e) => ({
+          entryId: e.id,
+          date: e.finishedAt.slice(0, 10),
+          path: `~/.local/share/ProjectHibernate/quarantine/${e.finishedAt.slice(0, 10)}/${e.id}`,
+          bytes: e.totalRecovered,
+          fileCount: 1000,
+          projects: e.projects.map((p) => p.name),
+        }));
     },
     async purgeQuarantineBatch(entryId) {
       const e = history.find((x) => x.id === entryId);

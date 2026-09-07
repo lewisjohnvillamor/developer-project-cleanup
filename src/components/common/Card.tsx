@@ -1,6 +1,12 @@
 import type { ReactNode } from "react";
 
-export function Card({ title, action, children, className = "", padded = true }: { title?: ReactNode; action?: ReactNode; children: ReactNode; className?: string; padded?: boolean }) {
+export function Card({
+  title,
+  action,
+  children,
+  className = "",
+  padded = true,
+}: { title?: ReactNode; action?: ReactNode; children: ReactNode; className?: string; padded?: boolean }) {
   return (
     <section className={`rounded-lg border border-border bg-surface ${className}`}>
       {(title || action) && (

@@ -1,4 +1,4 @@
-import { STACK_LABELS, type Project, type ProjectStatus, type Stack } from "@/types";
+import { type Project, type ProjectStatus, STACK_LABELS, type Stack } from "@/types";
 import { daysSince } from "./format";
 
 export type SortKey = "name" | "stack" | "status" | "lastActive" | "totalBytes" | "reclaimableBytes" | "safety";

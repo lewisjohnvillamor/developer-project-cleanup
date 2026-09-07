@@ -1,5 +1,5 @@
-import { useEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { IconButton } from "./Button";
 
 export function Dialog({
@@ -28,7 +28,11 @@ export function Dialog({
     if (!open) return;
     const previous = document.activeElement as HTMLElement | null;
     const focusable = () =>
-      Array.from(panel.current?.querySelectorAll<HTMLElement>("button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])") ?? []);
+      Array.from(
+        panel.current?.querySelectorAll<HTMLElement>(
+          "button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+        ) ?? [],
+      );
     const first = focusable()[0];
     (first ?? panel.current)?.focus();
     const onKey = (e: KeyboardEvent) => {
@@ -59,7 +63,11 @@ export function Dialog({
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6 backdrop-blur-[1px]" onMouseDown={closable ? onClose : undefined} role="presentation">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6 backdrop-blur-[1px]"
+      onMouseDown={closable ? onClose : undefined}
+      role="presentation"
+    >
       <div
         ref={panel}
         role="dialog"
@@ -71,7 +79,9 @@ export function Dialog({
       >
         <header className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
           <div>
-            <h2 id="dialog-title" className="text-[15px] font-semibold text-fg">{title}</h2>
+            <h2 id="dialog-title" className="text-[15px] font-semibold text-fg">
+              {title}
+            </h2>
             {subtitle && <p className="mt-0.5 text-[12px] text-fg-muted">{subtitle}</p>}
           </div>
           {closable && (

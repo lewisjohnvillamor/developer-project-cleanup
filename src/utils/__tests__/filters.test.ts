@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
 import type { Project } from "@/types";
-import { activeFilterCount, applyFilters, bulkEligible, EMPTY_FILTERS, isIgnored, primaryLabel, sortProjects } from "../filters";
+import { describe, expect, it } from "vitest";
+import { EMPTY_FILTERS, activeFilterCount, applyFilters, bulkEligible, isIgnored, primaryLabel, sortProjects } from "../filters";
 
 const NOW = Date.parse("2026-09-07T12:00:00Z");
 const ago = (days: number) => new Date(NOW - days * 86_400_000).toISOString();
@@ -40,7 +40,14 @@ function project(overrides: Partial<Project> & { name: string }): Project {
 
 const projects = [
   project({ name: "LogParser", stacks: ["rust"], reclaimableBytes: 7_600_000_000, totalBytes: 8_100_000_000, lastActivityAt: ago(67) }),
-  project({ name: "BrowserSnaps", frameworks: ["Next.js", "TypeScript"], reclaimableBytes: 890_000_000, totalBytes: 1_200_000_000, lastActivityAt: ago(14), git: { ...project({ name: "x" }).git!, state: "modified", isClean: false, modifiedCount: 2 } }),
+  project({
+    name: "BrowserSnaps",
+    frameworks: ["Next.js", "TypeScript"],
+    reclaimableBytes: 890_000_000,
+    totalBytes: 1_200_000_000,
+    lastActivityAt: ago(14),
+    git: { ...project({ name: "x" }).git!, state: "modified", isClean: false, modifiedCount: 2 },
+  }),
   project({ name: "Pointsy", stacks: ["rust"], status: "protected", protected: true, reclaimableBytes: 3_100_000_000, lastActivityAt: ago(4) }),
   project({ name: "hidden", ignoredUntil: ago(-30), reclaimableBytes: 10 }),
   project({ name: "expired-ignore", ignoredUntil: ago(1), reclaimableBytes: 20 }),

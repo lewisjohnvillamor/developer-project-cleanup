@@ -19,6 +19,16 @@
 - "Copy diagnostics" for bug reports.
 - CLI: `--full`, `caches`, `export`, `quarantine list|purge`.
 - Frontend unit + store tests (Vitest), a Playwright walkthrough, and a tag-driven release workflow with optional signing.
+- Project table is windowed: only visible rows render, so thousands of projects scroll smoothly; keyboard navigation works across the whole list.
+- Tests for the Tauri layer (scheduler decisions, post-cleanup projection) and a desktop smoke test that drives the real binary on Xvfb in CI.
+
+### Project
+- README with screenshots and a comparison to kondo, npkill and cargo-sweep.
+- CONTRIBUTING, SECURITY (private reporting for data-loss bugs), CODE_OF_CONDUCT, ROADMAP with the one guiding rule, issue templates that ask for diagnostics, PR template.
+- Supply-chain gates in CI: cargo audit, cargo deny (licenses, yanked crates, sources), npm audit; Dependabot for Cargo, npm and Actions.
+- Biome for TypeScript linting and formatting (`npm run lint`, `npm run format`).
+- `npm run version:bump <semver>` updates package.json, the lockfile, tauri.conf.json, Cargo.toml and Cargo.lock together.
+- Packaging templates for Homebrew (cask + formula), winget and Scoop, crates.io metadata, and docs/DISTRIBUTION.md including updater key setup.
 
 ## 0.1.0
 

@@ -1,0 +1,25 @@
+name: New ecosystem or cleanup rule
+description: Ask for a language, framework or generated folder to be recognised.
+labels: [enhancement, rules]
+body:
+  - type: input
+    id: marker
+    attributes:
+      label: How is a project root recognised?
+      placeholder: e.g. Package.swift, mix.exs
+    validations:
+      required: true
+  - type: textarea
+    id: folders
+    attributes:
+      label: Generated folders and the command that recreates them
+      placeholder: |
+        .build/  → swift build
+        deps/    → mix deps.get (sometimes patched by hand → review)
+    validations:
+      required: true
+  - type: textarea
+    id: caveats
+    attributes:
+      label: Anything a naive rule would get wrong?
+      description: Folders with the same name that hold real work, tools that write user data into build folders, etc.

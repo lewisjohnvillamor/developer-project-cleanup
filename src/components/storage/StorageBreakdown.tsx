@@ -1,6 +1,6 @@
 import { Card } from "@/components/common/Card";
 import { useAppStore } from "@/stores/app-store";
-import { CATEGORY_LABELS, type ArtifactCategory } from "@/types";
+import { type ArtifactCategory, CATEGORY_LABELS } from "@/types";
 import { formatBytes, formatCount } from "@/utils/format";
 
 const COLORS: Record<ArtifactCategory, string> = {
@@ -38,7 +38,12 @@ export function StorageBreakdown() {
         <div className="flex flex-col gap-2.5">
           <div className="flex h-2 w-full overflow-hidden rounded-full bg-surface-3">
             {rows.map((r) => (
-              <div key={r.category} className={`${COLORS[r.category]} h-full`} style={{ width: `${(r.bytes / total) * 100}%` }} title={CATEGORY_LABELS[r.category]} />
+              <div
+                key={r.category}
+                className={`${COLORS[r.category]} h-full`}
+                style={{ width: `${(r.bytes / total) * 100}%` }}
+                title={CATEGORY_LABELS[r.category]}
+              />
             ))}
           </div>
           <ul className="mt-1 flex flex-col gap-1.5">

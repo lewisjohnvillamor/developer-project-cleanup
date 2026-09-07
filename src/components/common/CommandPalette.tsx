@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Archive, Download, FolderOpen, FolderPlus, History, LayoutDashboard, Moon, RefreshCw, Search, Settings, Shield, Sun, Monitor } from "lucide-react";
 import { useAppStore } from "@/stores/app-store";
-import { formatBytes } from "@/utils/format";
 import { primaryLabel } from "@/utils/filters";
+import { formatBytes } from "@/utils/format";
+import { Archive, Download, FolderOpen, FolderPlus, History, LayoutDashboard, Monitor, Moon, RefreshCw, Search, Settings, Shield, Sun } from "lucide-react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Kbd } from "./Controls";
 
 interface Item {
@@ -35,9 +35,23 @@ export function CommandPalette() {
     const s = useAppStore.getState();
     const actions: Item[] = [
       { id: "scan", label: "Scan projects", hint: "reuse cached sizes", icon: <Search size={14} />, group: "Actions", run: () => s.startScan() },
-      { id: "rescan", label: "Full rescan", hint: "measure everything again", icon: <RefreshCw size={14} />, group: "Actions", run: () => s.startScan(undefined, true) },
+      {
+        id: "rescan",
+        label: "Full rescan",
+        hint: "measure everything again",
+        icon: <RefreshCw size={14} />,
+        group: "Actions",
+        run: () => s.startScan(undefined, true),
+      },
       { id: "folders", label: "Choose project folders", icon: <FolderPlus size={14} />, group: "Actions", run: () => s.setAddFoldersOpen(true) },
-      { id: "hib", label: `Review & hibernate selection`, hint: selection.size ? `${selection.size} selected` : "nothing selected", icon: <Archive size={14} />, group: "Actions", run: () => selection.size && s.reviewHibernate([...selection]) },
+      {
+        id: "hib",
+        label: "Review & hibernate selection",
+        hint: selection.size ? `${selection.size} selected` : "nothing selected",
+        icon: <Archive size={14} />,
+        group: "Actions",
+        run: () => selection.size && s.reviewHibernate([...selection]),
+      },
       { id: "export-csv", label: "Export projects as CSV", icon: <Download size={14} />, group: "Actions", run: () => s.exportProjects("csv") },
       { id: "export-json", label: "Export projects as JSON", icon: <Download size={14} />, group: "Actions", run: () => s.exportProjects("json") },
       { id: "theme-light", label: "Theme: light", icon: <Sun size={14} />, group: "Actions", run: () => s.saveSettings({ theme: "light" }) },
@@ -93,7 +107,12 @@ export function CommandPalette() {
 
   return (
     <div className="fixed inset-0 z-[70] flex items-start justify-center bg-black/40 pt-[12vh]" onMouseDown={() => setOpen(false)} role="presentation">
-      <div className="fade-in w-full max-w-lg overflow-hidden rounded-xl border border-border bg-surface shadow-panel" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Command palette">
+      <div
+        className="fade-in w-full max-w-lg overflow-hidden rounded-xl border border-border bg-surface shadow-panel"
+        onMouseDown={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-label="Command palette"
+      >
         <div className="flex items-center gap-2 border-b border-border px-3">
           <Search size={15} className="text-fg-subtle" />
           <input
@@ -120,12 +139,12 @@ export function CommandPalette() {
           />
           <Kbd>Esc</Kbd>
         </div>
-        <ul className="max-h-[50vh] overflow-y-auto p-1" role="listbox">
-          {filtered.length === 0 && <li className="px-3 py-6 text-center text-[12.5px] text-fg-muted">Nothing matches.</li>}
+        <div className="max-h-[50vh] overflow-y-auto p-1" role="listbox" tabIndex={-1} aria-label="Results">
+          {filtered.length === 0 && <div className="px-3 py-6 text-center text-[12.5px] text-fg-muted">Nothing matches.</div>}
           {filtered.map((item, i) => {
             const showGroup = i === 0 || filtered[i - 1]!.group !== item.group;
             return (
-              <li key={item.id}>
+              <div key={item.id}>
                 {showGroup && <div className="px-2 pb-1 pt-2 text-[10.5px] font-semibold uppercase tracking-wide text-fg-subtle">{item.group}</div>}
                 <button
                   type="button"
@@ -139,16 +158,26 @@ export function CommandPalette() {
                   <span className="flex-1 truncate">{item.label}</span>
                   {item.hint && <span className="truncate text-[11px] text-fg-subtle">{item.hint}</span>}
                 </button>
-              </li>
+              </div>
             );
           })}
-        </ul>
+        </div>
         <div className="flex items-center gap-3 border-t border-border px-3 py-1.5 text-[10.5px] text-fg-subtle">
-          <span><Kbd>↑↓</Kbd> navigate</span>
-          <span><Kbd>↵</Kbd> run</span>
-          <span><Kbd>/</Kbd> search projects</span>
-          <span><Kbd>H</Kbd> hibernate selection</span>
-          <span><Kbd>P</Kbd> protect</span>
+          <span>
+            <Kbd>↑↓</Kbd> navigate
+          </span>
+          <span>
+            <Kbd>↵</Kbd> run
+          </span>
+          <span>
+            <Kbd>/</Kbd> search projects
+          </span>
+          <span>
+            <Kbd>H</Kbd> hibernate selection
+          </span>
+          <span>
+            <Kbd>P</Kbd> protect
+          </span>
         </div>
       </div>
     </div>

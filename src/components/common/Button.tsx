@@ -1,5 +1,5 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { Loader2 } from "lucide-react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger" | "outline";
 type Size = "sm" | "md" | "lg";

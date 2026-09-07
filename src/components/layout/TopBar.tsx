@@ -1,8 +1,8 @@
-import { ChevronDown, Command, Download, FolderPlus, Loader2, RefreshCw, Search, X } from "lucide-react";
 import { Button } from "@/components/common/Button";
 import { Kbd, Menu, ProgressBar } from "@/components/common/Controls";
 import { useAppStore } from "@/stores/app-store";
 import { formatRelative } from "@/utils/format";
+import { ChevronDown, Command, Download, FolderPlus, Loader2, RefreshCw, Search, X } from "lucide-react";
 
 const TITLES: Record<string, string> = {
   overview: "Overview",
@@ -34,9 +34,7 @@ export function TopBar() {
         {scan.running ? (
           <div className="flex items-center gap-2 text-[12px] text-fg-muted">
             <Loader2 size={13} className="animate-spin text-accent" />
-            <span className="tabular">
-              {scan.scanned === 0 ? `Found ${scan.discovered} projects…` : `Measured ${scan.scanned} of ${scan.discovered}`}
-            </span>
+            <span className="tabular">{scan.scanned === 0 ? `Found ${scan.discovered} projects…` : `Measured ${scan.scanned} of ${scan.discovered}`}</span>
             <ProgressBar value={progress} className="w-32" />
             {scan.currentName && <span className="max-w-48 truncate font-mono text-[11px] text-fg-subtle">{scan.currentName}</span>}
           </div>
@@ -75,7 +73,13 @@ export function TopBar() {
             <Menu
               align="right"
               trigger={() => (
-                <Button variant="primary" size="sm" disabled={hibernating} className="rounded-l-none border-l border-l-white/20 px-1.5" title="More scan options">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={hibernating}
+                  className="rounded-l-none border-l border-l-white/20 px-1.5"
+                  title="More scan options"
+                >
                   <ChevronDown size={13} />
                 </Button>
               )}

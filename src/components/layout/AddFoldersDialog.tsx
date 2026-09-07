@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { Folder, FolderPlus, Search, Trash2 } from "lucide-react";
 import { Button, IconButton } from "@/components/common/Button";
-import { Dialog } from "@/components/common/Dialog";
 import { TextInput } from "@/components/common/Controls";
+import { Dialog } from "@/components/common/Dialog";
 import { useAppStore } from "@/stores/app-store";
+import { Folder, FolderPlus, Search, Trash2 } from "lucide-react";
+import { useState } from "react";
 
 const SUGGESTED = ["~/Projects", "~/Developer", "~/Code", "~/Documents/Projects"];
 
@@ -78,7 +78,9 @@ export function AddFoldersDialog() {
             ))}
           </ul>
         ) : (
-          <p className="rounded-md border border-dashed border-border-strong px-3 py-4 text-center text-[12.5px] text-fg-muted">No folders yet. Pick the folder where you keep your projects.</p>
+          <p className="rounded-md border border-dashed border-border-strong px-3 py-4 text-center text-[12.5px] text-fg-muted">
+            No folders yet. Pick the folder where you keep your projects.
+          </p>
         )}
         <div className="flex gap-2">
           <Button variant="secondary" icon={<FolderPlus size={14} />} onClick={pick} loading={busy}>
@@ -92,7 +94,12 @@ export function AddFoldersDialog() {
         <div className="flex flex-wrap items-center gap-1.5 text-[11.5px] text-fg-subtle">
           <span>Common:</span>
           {SUGGESTED.map((s) => (
-            <button key={s} type="button" onClick={() => setTyped(s)} className="rounded border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-fg-muted hover:text-fg">
+            <button
+              key={s}
+              type="button"
+              onClick={() => setTyped(s)}
+              className="rounded border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-fg-muted hover:text-fg"
+            >
               {s}
             </button>
           ))}

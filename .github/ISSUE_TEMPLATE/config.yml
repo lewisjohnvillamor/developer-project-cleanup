@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Something was deleted that should not have been
+    url: https://github.com/lewisjohnvillamor/developer-project-cleanup/security/advisories/new
+    about: Report privately. Data-loss bugs are handled as security issues.
+  - name: Questions and ideas
+    url: https://github.com/lewisjohnvillamor/developer-project-cleanup/discussions
+    about: Ask before opening a feature request; check ROADMAP.md first.

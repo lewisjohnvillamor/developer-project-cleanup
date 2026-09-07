@@ -1,7 +1,7 @@
-import { Archive, ListChecks, X } from "lucide-react";
 import { Button } from "@/components/common/Button";
 import { useAppStore } from "@/stores/app-store";
 import { formatBytes, pluralize } from "@/utils/format";
+import { Archive, ListChecks, X } from "lucide-react";
 
 export function BulkActionBar() {
   const selection = useAppStore((s) => s.selection);

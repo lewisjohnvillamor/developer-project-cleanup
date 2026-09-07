@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
-import { AlertTriangle, ArchiveRestore, ChevronDown, ChevronRight, FolderOpen, History, ShieldAlert, Trash2 } from "lucide-react";
-import { Button } from "@/components/common/Button";
 import { Badge } from "@/components/common/Badge";
+import { Button } from "@/components/common/Button";
 import { EmptyState } from "@/components/common/Controls";
 import { useAppStore } from "@/stores/app-store";
-import { describeOutcome, entryRestorable, outcomeIsError, type HistoryEntry } from "@/types";
+import { type HistoryEntry, describeOutcome, entryRestorable, outcomeIsError } from "@/types";
 import { formatBytes, formatDate, formatDateTime, pluralize } from "@/utils/format";
+import { AlertTriangle, ArchiveRestore, ChevronDown, ChevronRight, FolderOpen, History, ShieldAlert, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 
 const DISPOSITION_LABEL = { trash: "Trash", quarantine: "Quarantine", permanent: "Permanent" } as const;
 
@@ -124,15 +124,15 @@ function QuarantinePanel() {
     <section>
       <h3 className="mb-2 flex items-center justify-between text-[12px] font-semibold uppercase tracking-wide text-fg-muted">
         <span>Quarantine · {formatBytes(total)}</span>
-        <span className="font-normal normal-case tracking-normal text-fg-subtle">Batches expire after {retention} day{retention === 1 ? "" : "s"}</span>
+        <span className="font-normal normal-case tracking-normal text-fg-subtle">
+          Batches expire after {retention} day{retention === 1 ? "" : "s"}
+        </span>
       </h3>
       <ul className="divide-y divide-border rounded-lg border border-border bg-surface">
         {quarantine.map((b) => (
           <li key={b.entryId} className="flex items-center gap-3 px-4 py-2.5 text-[12.5px]">
             <div className="min-w-0 flex-1">
-              <div className="text-fg">
-                {b.projects.length ? b.projects.join(", ") : "(empty)"}
-              </div>
+              <div className="text-fg">{b.projects.length ? b.projects.join(", ") : "(empty)"}</div>
               <div className="truncate font-mono text-[11px] text-fg-subtle" title={b.path}>
                 {b.date} · {b.entryId}
               </div>
@@ -143,7 +143,15 @@ function QuarantinePanel() {
                 <Button size="sm" variant="ghost" onClick={() => setConfirm(null)}>
                   Keep
                 </Button>
-                <Button size="sm" variant="danger" icon={<ShieldAlert size={12} />} onClick={() => { setConfirm(null); purge(b.entryId); }}>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  icon={<ShieldAlert size={12} />}
+                  onClick={() => {
+                    setConfirm(null);
+                    purge(b.entryId);
+                  }}
+                >
                   Delete permanently
                 </Button>
               </>
@@ -165,7 +173,12 @@ export function HistoryPage() {
   const setPage = useAppStore((s) => s.setPage);
   if (!history.length) {
     return (
-      <EmptyState icon={<History size={22} />} title="No cleanups yet" description="Each hibernate run is recorded here with what was removed, where it went and how much space came back." action={<Button onClick={() => setPage("projects")}>Go to Projects</Button>} />
+      <EmptyState
+        icon={<History size={22} />}
+        title="No cleanups yet"
+        description="Each hibernate run is recorded here with what was removed, where it went and how much space came back."
+        action={<Button onClick={() => setPage("projects")}>Go to Projects</Button>}
+      />
     );
   }
   const lifetime = history.reduce((s, e) => s + e.totalRecovered, 0);

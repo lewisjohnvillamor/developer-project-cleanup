@@ -1,12 +1,29 @@
-import { useEffect, useMemo, useState } from "react";
-import { Archive, ArchiveRestore, Ban, ChevronDown, Copy, EyeOff, FolderOpen, GitBranch, HelpCircle, Layers, Shield, ShieldOff, X, AlertTriangle, Clock, Timer } from "lucide-react";
-import { Button, IconButton } from "@/components/common/Button";
 import { Badge, GitBadge, SafetyBadge, StatusBadge } from "@/components/common/Badge";
+import { Button, IconButton } from "@/components/common/Button";
 import { Checkbox, Menu } from "@/components/common/Controls";
 import { useAppStore } from "@/stores/app-store";
-import { STACK_LABELS, type CleanupArtifact } from "@/types";
+import { type CleanupArtifact, STACK_LABELS } from "@/types";
 import { isIgnored } from "@/utils/filters";
 import { formatBytes, formatCount, formatDate, formatRelative } from "@/utils/format";
+import {
+  AlertTriangle,
+  Archive,
+  ArchiveRestore,
+  Ban,
+  ChevronDown,
+  Clock,
+  Copy,
+  EyeOff,
+  FolderOpen,
+  GitBranch,
+  HelpCircle,
+  Layers,
+  Shield,
+  ShieldOff,
+  Timer,
+  X,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 export function ProjectDetailsDrawer() {
   const id = useAppStore((s) => s.drawerProjectId);
@@ -130,7 +147,9 @@ export function ProjectDetailsDrawer() {
         </dl>
 
         {p.safetyReasons.length > 0 && (
-          <div className={`mt-4 flex items-start gap-2 rounded-md px-3 py-2 text-[12px] ${p.safety === "review" ? "bg-review-soft text-review" : "bg-surface-2 text-fg-muted"}`}>
+          <div
+            className={`mt-4 flex items-start gap-2 rounded-md px-3 py-2 text-[12px] ${p.safety === "review" ? "bg-review-soft text-review" : "bg-surface-2 text-fg-muted"}`}
+          >
             {p.safety === "review" ? <AlertTriangle size={14} className="mt-0.5 shrink-0" /> : <SafetyBadge safety={p.safety} compact />}
             <ul>
               {p.safetyReasons.map((r) => (
@@ -162,7 +181,9 @@ export function ProjectDetailsDrawer() {
             <Timer size={14} className="mt-0.5 shrink-0" />
             <div>
               Measuring this project took {(p.scanDurationMs / 1000).toFixed(0)}s.
-              {p.cacheHits > 0 ? ` ${p.cacheHits} folder size${p.cacheHits === 1 ? "" : "s"} came from the cache.` : " Unchanged folders are reused on the next scan."}
+              {p.cacheHits > 0
+                ? ` ${p.cacheHits} folder size${p.cacheHits === 1 ? "" : "s"} came from the cache.`
+                : " Unchanged folders are reused on the next scan."}
             </div>
           </div>
         )}
@@ -237,7 +258,9 @@ export function ProjectDetailsDrawer() {
             </ul>
           ) : (
             <p className="rounded-md border border-dashed border-border px-3 py-3 text-[12px] text-fg-muted">
-              {p.status === "hibernated" ? "Everything regeneratable has been removed. Wake the project to reinstall dependencies." : "No regeneratable folders found in this project."}
+              {p.status === "hibernated"
+                ? "Everything regeneratable has been removed. Wake the project to reinstall dependencies."
+                : "No regeneratable folders found in this project."}
             </p>
           )}
         </section>
@@ -286,7 +309,11 @@ export function ProjectDetailsDrawer() {
               Hibernate{selectedBytes > 0 ? ` · ${formatBytes(selectedBytes)}` : ""}
             </Button>
           )}
-          <Button variant={p.protected ? "secondary" : "outline"} icon={p.protected ? <ShieldOff size={14} /> : <Shield size={14} />} onClick={() => setProtected(p.id, !p.protected)}>
+          <Button
+            variant={p.protected ? "secondary" : "outline"}
+            icon={p.protected ? <ShieldOff size={14} /> : <Shield size={14} />}
+            onClick={() => setProtected(p.id, !p.protected)}
+          >
             {p.protected ? "Unprotect" : "Protect"}
           </Button>
         </div>

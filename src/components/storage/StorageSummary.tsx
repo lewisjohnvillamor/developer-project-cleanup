@@ -1,11 +1,20 @@
+import { useAppStore } from "@/stores/app-store";
+import { formatBytes, formatPercent, splitBytes } from "@/utils/format";
 import { Database, FolderOpen, HardDrive, Percent } from "lucide-react";
 import type { ReactNode } from "react";
-import { splitBytes, formatPercent, formatBytes } from "@/utils/format";
-import { useAppStore } from "@/stores/app-store";
 
-function Stat({ icon, value, unit, label, emphasis, hint }: { icon: ReactNode; value: string; unit?: string; label: string; emphasis?: boolean; hint?: string }) {
+function Stat({
+  icon,
+  value,
+  unit,
+  label,
+  emphasis,
+  hint,
+}: { icon: ReactNode; value: string; unit?: string; label: string; emphasis?: boolean; hint?: string }) {
   return (
-    <div className={`flex flex-col gap-1 rounded-lg border bg-surface px-4 py-3.5 ${emphasis ? "border-accent/40 shadow-[inset_0_0_0_1px_var(--accent-soft)]" : "border-border"}`}>
+    <div
+      className={`flex flex-col gap-1 rounded-lg border bg-surface px-4 py-3.5 ${emphasis ? "border-accent/40 shadow-[inset_0_0_0_1px_var(--accent-soft)]" : "border-border"}`}
+    >
       <div className="flex items-center gap-1.5 text-[11.5px] font-medium uppercase tracking-wide text-fg-muted">
         <span className={emphasis ? "text-accent" : ""}>{icon}</span>
         {label}
@@ -33,10 +42,23 @@ export function StorageSummary() {
 
   return (
     <div className="grid grid-cols-4 gap-3">
-      <Stat icon={<Database size={13} />} value={r} unit={ru} label="Safely reclaimable" emphasis hint={review > 0 ? `+ ${formatBytes(review)} more after review` : "Regeneratable folders only"} />
+      <Stat
+        icon={<Database size={13} />}
+        value={r}
+        unit={ru}
+        label="Safely reclaimable"
+        emphasis
+        hint={review > 0 ? `+ ${formatBytes(review)} more after review` : "Regeneratable folders only"}
+      />
       <Stat icon={<HardDrive size={13} />} value={t} unit={tu} label="Total project size" hint={scanning ? "Still measuring…" : undefined} />
       <Stat icon={<FolderOpen size={13} />} value={String(count)} label="Projects" hint={scanning ? "Appearing as they are measured" : undefined} />
-      <Stat icon={<Percent size={13} />} value={formatPercent(reclaimable, total).replace("%", "")} unit="%" label="Potential recovery" hint="Of total project size" />
+      <Stat
+        icon={<Percent size={13} />}
+        value={formatPercent(reclaimable, total).replace("%", "")}
+        unit="%"
+        label="Potential recovery"
+        hint="Of total project size"
+      />
     </div>
   );
 }

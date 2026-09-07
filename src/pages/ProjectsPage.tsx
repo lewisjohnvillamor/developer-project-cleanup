@@ -5,10 +5,12 @@ import { ProjectToolbar } from "@/components/projects/ProjectToolbar";
 import { useProjectList } from "@/hooks/useProjectList";
 import { useAppStore } from "@/stores/app-store";
 import { formatBytes, pluralize } from "@/utils/format";
+import { useRef } from "react";
 
 export function ProjectsPage() {
   const visible = useProjectList();
   const total = useAppStore((s) => s.projects.length);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const reclaimable = visible.reduce((s, p) => s + p.reclaimableBytes, 0);
   return (
     <div className="flex h-full flex-col">
@@ -22,8 +24,8 @@ export function ProjectsPage() {
         <span>Click a row for details · Checkbox to select</span>
       </div>
       <div className="relative min-h-0 flex-1">
-        <div className="h-full overflow-auto">
-          <ProjectTable projects={visible} />
+        <div ref={scrollRef} className="h-full overflow-auto">
+          <ProjectTable projects={visible} scrollRef={scrollRef} />
           <div className="h-20" />
         </div>
         <BulkActionBar />

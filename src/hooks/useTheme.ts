@@ -1,5 +1,5 @@
-import { useEffect } from "react";
 import { useAppStore } from "@/stores/app-store";
+import { useEffect } from "react";
 
 /** Apply the theme setting to <html>, following the OS when set to system. */
 export function useTheme() {

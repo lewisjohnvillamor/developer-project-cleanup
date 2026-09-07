@@ -43,13 +43,7 @@ export const STACK_LABELS: Record<Stack, string> = {
 
 export type Safety = "safe" | "review" | "protected";
 
-export type ArtifactCategory =
-  | "nodeDependencies"
-  | "rustTarget"
-  | "buildArtifacts"
-  | "pythonEnvironments"
-  | "caches"
-  | "other";
+export type ArtifactCategory = "nodeDependencies" | "rustTarget" | "buildArtifacts" | "pythonEnvironments" | "caches" | "other";
 
 export const CATEGORY_LABELS: Record<ArtifactCategory, string> = {
   nodeDependencies: "Node dependencies",

@@ -1,8 +1,8 @@
-import { ArrowRight, History } from "lucide-react";
 import { Button } from "@/components/common/Button";
 import { Card } from "@/components/common/Card";
 import { useAppStore } from "@/stores/app-store";
 import { formatBytes, formatDate, pluralize } from "@/utils/format";
+import { ArrowRight, History } from "lucide-react";
 
 export function RecentCleanup() {
   const history = useAppStore((s) => s.history);
@@ -42,7 +42,11 @@ export function RecentCleanup() {
                 </li>
               ))}
           </ul>
-          {history.length > 1 && <div className="text-[11.5px] text-fg-subtle">{formatBytes(lifetime)} recovered across {pluralize(history.length, "cleanup")}</div>}
+          {history.length > 1 && (
+            <div className="text-[11.5px] text-fg-subtle">
+              {formatBytes(lifetime)} recovered across {pluralize(history.length, "cleanup")}
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex items-center gap-3 py-2 text-[12.5px] text-fg-muted">

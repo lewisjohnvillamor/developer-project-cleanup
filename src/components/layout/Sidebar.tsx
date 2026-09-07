@@ -1,5 +1,5 @@
-import { FolderOpen, History, LayoutDashboard, Settings, Moon } from "lucide-react";
-import { useAppStore, type Page } from "@/stores/app-store";
+import { type Page, useAppStore } from "@/stores/app-store";
+import { FolderOpen, History, LayoutDashboard, Moon, Settings } from "lucide-react";
 
 const ITEMS: { page: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { page: "overview", label: "Overview", icon: LayoutDashboard },

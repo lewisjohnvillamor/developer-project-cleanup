@@ -1,7 +1,7 @@
-import { TrendingDown, TrendingUp } from "lucide-react";
 import { Card } from "@/components/common/Card";
 import { useAppStore } from "@/stores/app-store";
 import { formatBytes, formatDate } from "@/utils/format";
+import { TrendingDown, TrendingUp } from "lucide-react";
 
 /** Reclaimable space per scan, one point per day. Inline SVG, no library. */
 export function ReclaimTrend() {
@@ -31,7 +31,13 @@ export function ReclaimTrend() {
           {delta === 0 ? "no change" : `${up ? "+" : "−"}${formatBytes(Math.abs(delta))}`} since {formatDate(points[0]!.at)}
         </span>
       </div>
-      <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="mt-2 h-14 w-full" role="img" aria-label={`Reclaimable space over ${points.length} scans`}>
+      <svg
+        viewBox={`0 0 ${w} ${h}`}
+        preserveAspectRatio="none"
+        className="mt-2 h-14 w-full"
+        role="img"
+        aria-label={`Reclaimable space over ${points.length} scans`}
+      >
         <path d={area} fill="var(--accent)" opacity="0.12" />
         <path d={d} fill="none" stroke="var(--accent)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
       </svg>

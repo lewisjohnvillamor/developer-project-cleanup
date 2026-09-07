@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
-import { Sidebar } from "./Sidebar";
-import { TopBar } from "./TopBar";
-import { Toasts } from "./Toasts";
 import { AddFoldersDialog } from "./AddFoldersDialog";
+import { Sidebar } from "./Sidebar";
+import { Toasts } from "./Toasts";
+import { TopBar } from "./TopBar";
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (

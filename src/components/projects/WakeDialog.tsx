@@ -1,8 +1,8 @@
-import { useEffect, useRef } from "react";
-import { AlertTriangle, ArchiveRestore, Check, Loader2, Play, X, XCircle } from "lucide-react";
 import { Button } from "@/components/common/Button";
 import { Dialog } from "@/components/common/Dialog";
 import { useAppStore } from "@/stores/app-store";
+import { AlertTriangle, ArchiveRestore, Check, Loader2, Play, X, XCircle } from "lucide-react";
+import { useEffect, useRef } from "react";
 
 export function WakeDialog() {
   const w = useAppStore((s) => s.wake);
@@ -33,7 +33,13 @@ export function WakeDialog() {
             <Button variant="ghost" onClick={close}>
               Cancel
             </Button>
-            <Button variant="primary" icon={<Play size={14} />} onClick={run} disabled={plan.steps.length === 0} title={plan.missingTools.length ? "A required tool is missing; the run will fail" : undefined}>
+            <Button
+              variant="primary"
+              icon={<Play size={14} />}
+              onClick={run}
+              disabled={plan.steps.length === 0}
+              title={plan.missingTools.length ? "A required tool is missing; the run will fail" : undefined}
+            >
               Run Command{plan.steps.length > 1 ? "s" : ""}
             </Button>
           </>
@@ -61,7 +67,18 @@ export function WakeDialog() {
           <div className="flex flex-col gap-1">
             {plan.steps.map((s, i) => (
               <div key={i} className="flex items-center gap-2">
-                {w.stage !== "confirm" && (w.currentStep > i || w.stage === "done" ? (w.success === false && w.currentStep === i ? <XCircle size={13} className="text-danger" /> : <Check size={13} className="text-safe" />) : w.currentStep === i ? <Loader2 size={13} className="animate-spin text-accent" /> : <span className="h-3 w-3" />)}
+                {w.stage !== "confirm" &&
+                  (w.currentStep > i || w.stage === "done" ? (
+                    w.success === false && w.currentStep === i ? (
+                      <XCircle size={13} className="text-danger" />
+                    ) : (
+                      <Check size={13} className="text-safe" />
+                    )
+                  ) : w.currentStep === i ? (
+                    <Loader2 size={13} className="animate-spin text-accent" />
+                  ) : (
+                    <span className="h-3 w-3" />
+                  ))}
                 <code className="rounded bg-surface-2 px-2 py-0.5 font-mono text-[12px] text-fg selectable">{s.display}</code>
               </div>
             ))}
@@ -73,7 +90,14 @@ export function WakeDialog() {
           <div className="flex items-start gap-2 rounded-md border border-review/30 bg-review-soft/50 px-3 py-2 text-[12px] text-review">
             <AlertTriangle size={14} className="mt-0.5 shrink-0" />
             <div>
-              <div className="font-medium">Not found on PATH: {plan.missingTools.map((t) => <code key={t} className="mx-0.5 rounded bg-surface px-1 font-mono">{t}</code>)}</div>
+              <div className="font-medium">
+                Not found on PATH:{" "}
+                {plan.missingTools.map((t) => (
+                  <code key={t} className="mx-0.5 rounded bg-surface px-1 font-mono">
+                    {t}
+                  </code>
+                ))}
+              </div>
               <div className="text-fg-muted">Install it, or make sure the app was started from a shell where it is available.</div>
             </div>
           </div>
@@ -86,7 +110,10 @@ export function WakeDialog() {
           </ul>
         )}
         {w.stage !== "confirm" && (
-          <pre ref={logRef} className="max-h-72 min-h-40 overflow-auto rounded-md border border-border bg-[#0d0d10] p-3 font-mono text-[11.5px] leading-5 text-[#d6d6dc] selectable">
+          <pre
+            ref={logRef}
+            className="max-h-72 min-h-40 overflow-auto rounded-md border border-border bg-[#0d0d10] p-3 font-mono text-[11.5px] leading-5 text-[#d6d6dc] selectable"
+          >
             {w.lines.length ? w.lines.join("\n") : "Starting…"}
           </pre>
         )}

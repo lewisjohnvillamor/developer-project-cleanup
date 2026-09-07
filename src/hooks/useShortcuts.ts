@@ -1,6 +1,6 @@
-import { useEffect } from "react";
 import { useAppStore } from "@/stores/app-store";
 import { applyFilters, bulkEligible } from "@/utils/filters";
+import { useEffect } from "react";
 
 function inEditable(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;

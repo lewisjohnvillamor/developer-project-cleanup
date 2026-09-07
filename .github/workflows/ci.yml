@@ -33,6 +33,31 @@ jobs:
           cargo run -q -p hibernate-cli -- scan /tmp/fx | tee out.txt
           grep -q "node_modules/" out.txt
 
+  supply-chain:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo audit (RustSec advisories)
+        uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: cargo deny (licenses, yanked crates, sources)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories licenses sources bans
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: npm audit (production dependencies)
+        run: npm audit --omit=dev --audit-level=high
+      - name: npm audit (all, informational)
+        run: npm audit --audit-level=critical || true
+
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
@@ -43,6 +68,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run lint
       - run: npm run typecheck
       - run: npm test
       - run: npx vite build
@@ -88,6 +114,13 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libgtk-3-dev libxdo-dev
       - run: npm ci
       - run: cargo build -p project-hibernate
+      - name: Test the Tauri layer
+        run: cargo test -p project-hibernate
+      - name: Desktop smoke test (real binary on Xvfb)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y xvfb xdotool imagemagick
+          npm run smoke:desktop
       - name: Bundle
         run: npx tauri build --ci
       - uses: actions/upload-artifact@v4

@@ -1,7 +1,13 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronDown, Minus } from "lucide-react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
-export function Toggle({ checked, onChange, label, description, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: ReactNode; description?: ReactNode; disabled?: boolean }) {
+export function Toggle({
+  checked,
+  onChange,
+  label,
+  description,
+  disabled,
+}: { checked: boolean; onChange: (v: boolean) => void; label: ReactNode; description?: ReactNode; disabled?: boolean }) {
   return (
     <label className={`flex cursor-pointer items-start justify-between gap-4 py-2 ${disabled ? "opacity-50" : ""}`}>
       <span>
@@ -22,7 +28,13 @@ export function Toggle({ checked, onChange, label, description, disabled }: { ch
   );
 }
 
-export function Checkbox({ checked, indeterminate, onChange, disabled, title }: { checked: boolean; indeterminate?: boolean; onChange: (v: boolean) => void; disabled?: boolean; title?: string }) {
+export function Checkbox({
+  checked,
+  indeterminate,
+  onChange,
+  disabled,
+  title,
+}: { checked: boolean; indeterminate?: boolean; onChange: (v: boolean) => void; disabled?: boolean; title?: string }) {
   return (
     <button
       type="button"
@@ -43,7 +55,12 @@ export function Checkbox({ checked, indeterminate, onChange, disabled, title }: 
   );
 }
 
-export function Select<T extends string>({ value, onChange, options, className = "" }: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[]; className?: string }) {
+export function Select<T extends string>({
+  value,
+  onChange,
+  options,
+  className = "",
+}: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[]; className?: string }) {
   return (
     <div className={`relative ${className}`}>
       <select
@@ -62,7 +79,25 @@ export function Select<T extends string>({ value, onChange, options, className =
   );
 }
 
-export function TextInput({ value, onChange, placeholder, className = "", mono, type = "text", onKeyDown, id }: { value: string; onChange: (v: string) => void; placeholder?: string; className?: string; mono?: boolean; type?: string; onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void; id?: string }) {
+export function TextInput({
+  value,
+  onChange,
+  placeholder,
+  className = "",
+  mono,
+  type = "text",
+  onKeyDown,
+  id,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  className?: string;
+  mono?: boolean;
+  type?: string;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  id?: string;
+}) {
   return (
     <input
       id={id}
@@ -76,7 +111,14 @@ export function TextInput({ value, onChange, placeholder, className = "", mono, 
   );
 }
 
-export function NumberInput({ value, onChange, min, max, className = "", suffix }: { value: number; onChange: (v: number) => void; min?: number; max?: number; className?: string; suffix?: string }) {
+export function NumberInput({
+  value,
+  onChange,
+  min,
+  max,
+  className = "",
+  suffix,
+}: { value: number; onChange: (v: number) => void; min?: number; max?: number; className?: string; suffix?: string }) {
   return (
     <div className={`flex items-center gap-2 ${className}`}>
       <input
@@ -95,11 +137,18 @@ export function NumberInput({ value, onChange, min, max, className = "", suffix 
   );
 }
 
-export function RadioGroup<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: { value: T; label: ReactNode; description?: ReactNode; tone?: "danger" }[] }) {
+export function RadioGroup<T extends string>({
+  value,
+  onChange,
+  options,
+}: { value: T; onChange: (v: T) => void; options: { value: T; label: ReactNode; description?: ReactNode; tone?: "danger" }[] }) {
   return (
     <div className="flex flex-col gap-1.5">
       {options.map((o) => (
-        <label key={o.value} className={`flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2 transition-colors ${value === o.value ? "border-accent bg-accent-soft/50" : "border-border hover:bg-surface-2"}`}>
+        <label
+          key={o.value}
+          className={`flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2 transition-colors ${value === o.value ? "border-accent bg-accent-soft/50" : "border-border hover:bg-surface-2"}`}
+        >
           <input type="radio" className="mt-1 accent-[var(--accent)]" checked={value === o.value} onChange={() => onChange(o.value)} />
           <span>
             <span className={`block text-[13px] font-medium ${o.tone === "danger" ? "text-danger" : "text-fg"}`}>{o.label}</span>
@@ -121,7 +170,12 @@ export interface MenuItem {
   hint?: string;
 }
 
-export function Menu({ trigger, items, align = "left", className = "" }: { trigger: (open: boolean) => ReactNode; items: MenuItem[]; align?: "left" | "right"; className?: string }) {
+export function Menu({
+  trigger,
+  items,
+  align = "left",
+  className = "",
+}: { trigger: (open: boolean) => ReactNode; items: MenuItem[]; align?: "left" | "right"; className?: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -142,7 +196,8 @@ export function Menu({ trigger, items, align = "left", className = "" }: { trigg
       if (!els.length) return;
       e.preventDefault();
       const idx = els.findIndex((el) => el === document.activeElement);
-      const next = e.key === "Home" ? 0 : e.key === "End" ? els.length - 1 : e.key === "ArrowDown" ? (idx + 1) % els.length : (idx - 1 + els.length) % els.length;
+      const next =
+        e.key === "Home" ? 0 : e.key === "End" ? els.length - 1 : e.key === "ArrowDown" ? (idx + 1) % els.length : (idx - 1 + els.length) % els.length;
       els[next]?.focus();
     };
     window.addEventListener("mousedown", onDown);
@@ -155,12 +210,29 @@ export function Menu({ trigger, items, align = "left", className = "" }: { trigg
   }, [open]);
   return (
     <div ref={ref} className={`relative ${className}`}>
-      <div onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }} onKeyDown={(e) => { if (e.key === "ArrowDown" && !open) { e.preventDefault(); setOpen(true); } }}>{trigger(open)}</div>
+      <div
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown" && !open) {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
+      >
+        {trigger(open)}
+      </div>
       {open && (
-        <div ref={listRef} role="menu" className={`fade-in absolute z-40 mt-1 min-w-52 rounded-lg border border-border bg-surface p-1 shadow-panel ${align === "right" ? "right-0" : "left-0"}`}>
+        <div
+          ref={listRef}
+          role="menu"
+          className={`fade-in absolute z-40 mt-1 min-w-52 rounded-lg border border-border bg-surface p-1 shadow-panel ${align === "right" ? "right-0" : "left-0"}`}
+        >
           {items.map((item, i) =>
             item.separator ? (
-              <div key={i} role="separator" className="my-1 border-t border-border" />
+              <div key={i} aria-hidden="true" className="my-1 border-t border-border" />
             ) : (
               <button
                 key={i}
@@ -191,7 +263,9 @@ export function ProgressBar({ value, tone = "accent", className = "" }: { value:
   const color = tone === "safe" ? "bg-safe" : "bg-accent";
   return (
     <div className={`relative h-1.5 w-full overflow-hidden rounded-full bg-surface-3 ${value === null ? "indeterminate" : ""} ${className}`}>
-      {value !== null && <div className={`h-full rounded-full ${color} transition-[width] duration-300`} style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%` }} />}
+      {value !== null && (
+        <div className={`h-full rounded-full ${color} transition-[width] duration-300`} style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%` }} />
+      )}
     </div>
   );
 }
