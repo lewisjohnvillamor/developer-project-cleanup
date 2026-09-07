@@ -1,0 +1,24 @@
+name: Feature request
+description: Propose a change. Read ROADMAP.md first; requests outside its rule are closed.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that is hard or unsafe today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+  - type: checkboxes
+    id: rule
+    attributes:
+      label: Fit
+      options:
+        - label: This makes it easier or safer to reclaim storage from dormant projects (the roadmap's one rule).
+          required: true
+        - label: I checked ROADMAP.md and this is not under "Not planned".
+          required: true

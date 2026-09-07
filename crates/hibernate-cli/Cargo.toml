@@ -1,0 +1,21 @@
+[package]
+name = "hibernate-cli"
+description = "Command-line scanner and hibernate tool for developer projects"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["disk-space", "cleanup", "node-modules", "cargo-target", "developer-tools"]
+categories = ["command-line-utilities", "development-tools", "filesystem"]
+readme = "../../README.md"
+
+[[bin]]
+name = "hibernate"
+path = "src/main.rs"
+
+[dependencies]
+hibernate-core = { path = "../hibernate-core", version = "0.1.0" }
+clap = { version = "4", features = ["derive"] }
+serde_json.workspace = true
+chrono.workspace = true
+ctrlc = "3"

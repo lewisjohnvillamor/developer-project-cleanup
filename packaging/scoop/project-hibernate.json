@@ -1,0 +1,25 @@
+{
+  "version": "0.1.0",
+  "description": "Reclaim disk space from dormant developer projects without deleting source code.",
+  "homepage": "https://github.com/lewisjohnvillamor/developer-project-cleanup",
+  "license": "MIT",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/lewisjohnvillamor/developer-project-cleanup/releases/download/v0.1.0/Project.Hibernate_0.1.0_x64-setup.exe#/dl.7z",
+      "hash": "REPLACE_WITH_SHA256_OF_NSIS_EXE"
+    }
+  },
+  "installer": {
+    "script": "Invoke-ExternalCommand \"$dir\\dl.7z\" -ArgumentList @('/S', \"/D=$dir\") | Out-Null"
+  },
+  "bin": "project-hibernate.exe",
+  "shortcuts": [["project-hibernate.exe", "Project Hibernate"]],
+  "checkver": "github",
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/lewisjohnvillamor/developer-project-cleanup/releases/download/v$version/Project.Hibernate_$version_x64-setup.exe#/dl.7z"
+      }
+    }
+  }
+}

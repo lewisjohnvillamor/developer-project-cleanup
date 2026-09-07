@@ -1,0 +1,28 @@
+# winget manifest set (version + installer + locale in one file for readability).
+# Split into the three files winget-pkgs expects with `wingetcreate` or by hand:
+#   manifests/p/ProjectHibernate/ProjectHibernate/<version>/
+#     ProjectHibernate.ProjectHibernate.yaml
+#     ProjectHibernate.ProjectHibernate.installer.yaml
+#     ProjectHibernate.ProjectHibernate.locale.en-US.yaml
+# Easiest path per release: `wingetcreate update ProjectHibernate.ProjectHibernate -u <msi url> -v <version> --submit`.
+PackageIdentifier: ProjectHibernate.ProjectHibernate
+PackageVersion: 0.1.0
+PackageName: Project Hibernate
+Publisher: Project Hibernate contributors
+License: MIT
+LicenseUrl: https://github.com/lewisjohnvillamor/developer-project-cleanup/blob/main/LICENSE
+ShortDescription: Reclaim disk space from dormant developer projects without deleting source code.
+PackageUrl: https://github.com/lewisjohnvillamor/developer-project-cleanup
+Tags:
+  - developer-tools
+  - disk-space
+  - node_modules
+  - rust
+Installers:
+  - Architecture: x64
+    InstallerType: wix
+    InstallerUrl: https://github.com/lewisjohnvillamor/developer-project-cleanup/releases/download/v0.1.0/Project.Hibernate_0.1.0_x64_en-US.msi
+    InstallerSha256: REPLACE_WITH_SHA256_OF_MSI
+    ProductCode: "{REPLACE-WITH-PRODUCT-CODE}"
+ManifestType: singleton
+ManifestVersion: 1.6.0
