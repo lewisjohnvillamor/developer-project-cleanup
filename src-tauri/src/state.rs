@@ -3,10 +3,10 @@
 use chrono::{DateTime, Utc};
 use hibernate_core::cleanup::quarantine::Quarantine;
 use hibernate_core::config::{load_json, save_json, AppPaths, AppState, Settings};
-use hibernate_core::history::HistoryStore;
+use hibernate_core::history::{HistoryStore, ScanTrend};
 use hibernate_core::model::Project;
 use hibernate_core::scanner::activity;
-use hibernate_core::scanner::ScanSummary;
+use hibernate_core::scanner::{ScanSummary, TreeCache};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -61,9 +61,12 @@ pub struct AppCtx {
     pub state: Mutex<AppState>,
     pub history: Mutex<HistoryStore>,
     pub snapshot: Mutex<ScanSnapshot>,
+    pub tree_cache: Arc<Mutex<TreeCache>>,
+    pub trend: Mutex<ScanTrend>,
     pub scan: Job,
     pub hibernate: Job,
     pub wake: Job,
+    pub caches: Job,
 }
 
 impl AppCtx {
@@ -77,15 +80,33 @@ impl AppCtx {
         state.prune(Utc::now());
         let history = HistoryStore::load(&paths);
         let snapshot: ScanSnapshot = load_json(&paths.last_scan_file);
+        let tree_cache = TreeCache::load(&paths.tree_cache_file);
+        let trend = ScanTrend::load(&paths);
         AppCtx {
             paths,
             settings: Mutex::new(settings),
             state: Mutex::new(state),
             history: Mutex::new(history),
             snapshot: Mutex::new(snapshot),
+            tree_cache: Arc::new(Mutex::new(tree_cache)),
+            trend: Mutex::new(trend),
             scan: Job::new(),
             hibernate: Job::new(),
             wake: Job::new(),
+            caches: Job::new(),
+        }
+    }
+
+    pub fn save_tree_cache(&self) {
+        let cache = Self::lock(&self.tree_cache);
+        if let Err(err) = cache.save(&self.paths.tree_cache_file) {
+            log::warn!("cannot save tree cache: {err}");
+        }
+    }
+
+    pub fn save_trend(&self) {
+        if let Err(err) = Self::lock(&self.trend).save(&self.paths) {
+            log::warn!("cannot save scan trend: {err}");
         }
     }
 

@@ -431,11 +431,121 @@ fn builtin_rules() -> Vec<CleanupRule> {
         CleanupRule::new(
             "dotnet-obj",
             "obj",
-            &[DotNet],
+            &[DotNet, Unity],
             Safe,
             BuildArtifacts,
-            "MSBuild intermediate objects, rebuilt by `dotnet build`.",
+            "MSBuild intermediate objects, rebuilt by `dotnet build` or the Unity editor.",
             Some("dotnet build"),
+        ),
+        // ---- Swift / Elixir / Haskell / Zig ------------------------------------
+        CleanupRule::new(
+            "swift-build",
+            ".build",
+            &[Swift],
+            Safe,
+            BuildArtifacts,
+            "Swift Package Manager build directory, rebuilt by `swift build`.",
+            Some("swift build"),
+        ),
+        CleanupRule::new(
+            "elixir-build",
+            "_build",
+            &[Elixir],
+            Safe,
+            BuildArtifacts,
+            "Mix compiled output, rebuilt by `mix compile`.",
+            Some("mix compile"),
+        ),
+        CleanupRule::new(
+            "elixir-deps",
+            "deps",
+            &[Elixir],
+            Review,
+            Other,
+            "Mix dependencies fetched by `mix deps.get`. Some projects patch dependencies in place.",
+            Some("mix deps.get"),
+        ),
+        CleanupRule::new(
+            "haskell-dist",
+            "dist-newstyle",
+            &[Haskell],
+            Safe,
+            BuildArtifacts,
+            "Cabal build directory, rebuilt by `cabal build`.",
+            Some("cabal build"),
+        ),
+        CleanupRule::new(
+            "haskell-stack",
+            ".stack-work",
+            &[Haskell],
+            Safe,
+            BuildArtifacts,
+            "Stack build directory, rebuilt by `stack build`.",
+            Some("stack build"),
+        ),
+        CleanupRule::new(
+            "zig-cache",
+            "zig-cache",
+            &[Zig],
+            Safe,
+            Caches,
+            "Zig build cache.",
+            Some("zig build"),
+        ),
+        CleanupRule::new(
+            "zig-cache-hidden",
+            ".zig-cache",
+            &[Zig],
+            Safe,
+            Caches,
+            "Zig build cache.",
+            Some("zig build"),
+        ),
+        CleanupRule::new(
+            "zig-out",
+            "zig-out",
+            &[Zig],
+            Safe,
+            BuildArtifacts,
+            "Zig build output, rebuilt by `zig build`.",
+            Some("zig build"),
+        ),
+        // ---- Unity / Terraform ---------------------------------------------------
+        CleanupRule::new(
+            "unity-library",
+            "Library",
+            &[Unity],
+            Safe,
+            Caches,
+            "Unity asset import cache. Regenerated when the project is opened, which can take a while for large projects.",
+            Some("open the project in the Unity editor"),
+        ),
+        CleanupRule::new(
+            "unity-temp",
+            "Temp",
+            &[Unity],
+            Safe,
+            Caches,
+            "Unity temporary build files.",
+            None,
+        ),
+        CleanupRule::new(
+            "unity-logs",
+            "Logs",
+            &[Unity],
+            Safe,
+            Caches,
+            "Unity editor logs.",
+            None,
+        ),
+        CleanupRule::new(
+            "terraform",
+            ".terraform",
+            &[Terraform],
+            Review,
+            Other,
+            "Downloaded providers and modules, restored by `terraform init`. State files outside this folder are never touched.",
+            Some("terraform init"),
         ),
         // ---- iOS / Dart ------------------------------------------------------
         CleanupRule::new(
@@ -467,6 +577,92 @@ fn builtin_rules() -> Vec<CleanupRule> {
             None,
         ),
     ]
+}
+
+/// A directory that a candidate rule would match, for previews in Settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuleMatch {
+    pub project_name: String,
+    pub project_path: std::path::PathBuf,
+    pub path: std::path::PathBuf,
+    pub relative_path: String,
+    pub bytes: u64,
+    pub file_count: u64,
+}
+
+/// Find directories in the scanned projects that `pattern` would match if
+/// it were a rule for `ecosystems` (empty = every project). Existing
+/// artifacts, nested projects and protected names are skipped, the walk is
+/// depth-limited, and at most `limit` matches are measured.
+pub fn preview_matches(
+    projects: &[crate::model::Project],
+    pattern: &str,
+    ecosystems: &[Stack],
+    limit: usize,
+    cancel: &std::sync::atomic::AtomicBool,
+) -> Vec<RuleMatch> {
+    use crate::scanner::size::{measure_tree, relative};
+    use crate::scanner::traversal::is_default_ignored;
+    use std::sync::atomic::Ordering;
+    const MAX_DEPTH: usize = 5;
+    let pattern = pattern.trim();
+    if pattern.is_empty() || is_protected_name(pattern) {
+        return Vec::new();
+    }
+    let project_paths: std::collections::HashSet<&std::path::Path> =
+        projects.iter().map(|p| p.path.as_path()).collect();
+    let mut out = Vec::new();
+    'projects: for project in projects {
+        if !ecosystems.is_empty() && !ecosystems.iter().any(|e| project.stacks.contains(e)) {
+            continue;
+        }
+        let artifact_paths: std::collections::HashSet<&std::path::Path> =
+            project.artifacts.iter().map(|a| a.path.as_path()).collect();
+        let mut stack = vec![(project.path.clone(), 0usize)];
+        while let Some((dir, depth)) = stack.pop() {
+            if cancel.load(Ordering::Relaxed) {
+                break 'projects;
+            }
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let Ok(ft) = entry.file_type() else { continue };
+                if !ft.is_dir() || ft.is_symlink() {
+                    continue;
+                }
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let path = entry.path();
+                if is_default_ignored(&name)
+                    || artifact_paths.contains(path.as_path())
+                    || project_paths.contains(path.as_path())
+                {
+                    continue;
+                }
+                if glob_match(pattern, &name) && !is_protected_name(&name) {
+                    let size = measure_tree(&path, cancel);
+                    out.push(RuleMatch {
+                        project_name: project.name.clone(),
+                        project_path: project.path.clone(),
+                        relative_path: relative(&project.path, &path),
+                        path,
+                        bytes: size.bytes,
+                        file_count: size.files,
+                    });
+                    if out.len() >= limit {
+                        break 'projects;
+                    }
+                    continue;
+                }
+                if depth + 1 < MAX_DEPTH {
+                    stack.push((path, depth + 1));
+                }
+            }
+        }
+    }
+    out.sort_by(|a, b| b.bytes.cmp(&a.bytes));
+    out
 }
 
 /// Names that are never treated as artifacts, whatever the rules say.

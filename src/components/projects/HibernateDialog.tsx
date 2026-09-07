@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AlertTriangle, Archive, Check, ChevronDown, ChevronRight, Loader2, ShieldCheck, X } from "lucide-react";
 import { Button } from "@/components/common/Button";
 import { Dialog } from "@/components/common/Dialog";
-import { ProgressBar, Toggle } from "@/components/common/Controls";
+import { Checkbox, ProgressBar, Toggle } from "@/components/common/Controls";
 import { useAppStore } from "@/stores/app-store";
 import { describeOutcome, outcomeIsError } from "@/types";
 import { formatBytes, formatCount, pluralize } from "@/utils/format";
@@ -19,6 +19,7 @@ export function HibernateDialog() {
   const confirm = useAppStore((s) => s.confirmHibernate);
   const cancel = useAppStore((s) => s.cancelHibernate);
   const setIncludeReview = useAppStore((s) => s.setIncludeReview);
+  const toggleReviewArtifact = useAppStore((s) => s.toggleReviewArtifact);
   const saveSettings = useAppStore((s) => s.saveSettings);
   const setPage = useAppStore((s) => s.setPage);
   const [showFiles, setShowFiles] = useState(false);
@@ -115,10 +116,11 @@ export function HibernateDialog() {
                     <span className="tabular text-fg">{formatBytes(p.bytes)}</span>
                   </div>
                   {(expanded.has(p.id) || showFiles) && (
-                    <div className="fade-in ml-6 mt-1.5 flex flex-col gap-0.5 text-[12px]">
+                    <div className="fade-in ml-6 mt-1.5 flex flex-col gap-1 text-[12px]">
                       {p.artifacts.map((a) => (
-                        <div key={a.path} className="flex items-center justify-between">
-                          <span className="font-mono text-fg-muted">{a.relativePath}</span>
+                        <div key={a.path} className="flex items-center gap-2">
+                          <Checkbox checked onChange={() => toggleReviewArtifact(p.id, a.path)} disabled={h.planLoading} title="Leave this folder in place" />
+                          <span className="flex-1 font-mono text-fg-muted">{a.relativePath}</span>
                           <span className="tabular text-fg-muted">
                             {formatBytes(a.bytes)}
                             {a.safety === "review" && <span className="ml-1.5 text-review">review</span>}
@@ -126,11 +128,25 @@ export function HibernateDialog() {
                         </div>
                       ))}
                       {p.skippedReview.map((a) => (
-                        <div key={a.path} className="flex items-center justify-between text-fg-subtle">
-                          <span className="font-mono line-through">{a.relativePath}</span>
-                          <span className="tabular">{formatBytes(a.bytes)} · needs review, skipped</span>
+                        <div key={a.path} className="flex items-center gap-2 text-fg-subtle">
+                          <Checkbox checked={false} onChange={() => toggleReviewArtifact(p.id, a.path)} disabled={h.planLoading} title="Include this review folder" />
+                          <span className="flex-1 font-mono">{a.relativePath}</span>
+                          <span className="tabular">{formatBytes(a.bytes)} · <span className="text-review">needs review</span>, left in place</span>
                         </div>
                       ))}
+                      {(() => {
+                        // Safe folders unticked earlier can be brought back too.
+                        const original = useAppStore.getState().projects.find((x) => x.id === p.id);
+                        const shown = new Set([...p.artifacts, ...p.skippedReview].map((a) => a.path));
+                        const rest = original?.artifacts.filter((a) => !shown.has(a.path) && a.safety !== "protected") ?? [];
+                        return rest.map((a) => (
+                          <div key={a.path} className="flex items-center gap-2 text-fg-subtle">
+                            <Checkbox checked={false} onChange={() => toggleReviewArtifact(p.id, a.path)} disabled={h.planLoading} title="Include this folder" />
+                            <span className="flex-1 font-mono">{a.relativePath}</span>
+                            <span className="tabular">{formatBytes(a.bytes)} · left in place</span>
+                          </div>
+                        ));
+                      })()}
                       {p.warnings.map((w) => (
                         <div key={w} className="mt-1 flex items-center gap-1 text-review">
                           <AlertTriangle size={12} /> {w}
@@ -142,7 +158,7 @@ export function HibernateDialog() {
                 </li>
               ))}
             </ul>
-            <p className="text-[12px] text-fg-subtle">Projects remain usable after reinstalling dependencies. Use Wake to bring them back.</p>
+            <p className="text-[12px] text-fg-subtle">Expand a project to untick individual folders. Projects remain usable after reinstalling dependencies. Use Wake to bring them back.</p>
           </div>
         )}
       </Dialog>

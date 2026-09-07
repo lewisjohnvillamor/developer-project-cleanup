@@ -11,7 +11,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "tauri": "tauri",
     "test:core": "cargo test -p hibernate-core -p hibernate-cli",
-    "cli": "cargo run -q -p hibernate-cli --"
+    "cli": "cargo run -q -p hibernate-cli --",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "node e2e/walkthrough.mjs",
+    "check": "npm run typecheck && npm test && npx vite build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.4.0",
@@ -27,8 +31,11 @@
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^4.4.0",
+    "playwright": "^1.63.0",
     "tailwindcss": "^4.1.0",
     "typescript": "^5.8.0",
-    "vite": "^6.3.0"
+    "vite": "^6.3.0",
+    "vitest": "^3.2.7",
+    "wait-on": "^8.0.5"
   }
 }

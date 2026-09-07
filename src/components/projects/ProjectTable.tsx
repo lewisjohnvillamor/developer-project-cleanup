@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useCallback, useEffect, useRef } from "react";
 import { Archive, ArchiveRestore, ArrowDown, ArrowUp, EyeOff, FolderSearch, Shield } from "lucide-react";
 import { Button } from "@/components/common/Button";
 import { Checkbox, EmptyState } from "@/components/common/Controls";
@@ -36,6 +36,38 @@ export function ProjectTable({ projects }: { projects: Project[] }) {
   const eligible = projects.filter((p) => bulkEligible(p));
   const allSelected = eligible.length > 0 && eligible.every((p) => selection.has(p.id));
   const someSelected = eligible.some((p) => selection.has(p.id));
+  const bodyRef = useRef<HTMLTableSectionElement>(null);
+  const drawerId = useAppStore((s) => s.drawerProjectId);
+  const openDrawer = useAppStore((s) => s.openDrawer);
+  const toggleSelect = useAppStore((s) => s.toggleSelect);
+
+  // Arrow keys move the focused row, Enter opens it, Space selects it.
+  const onKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTableSectionElement>) => {
+      const rows = Array.from(bodyRef.current?.querySelectorAll<HTMLTableRowElement>("tr[data-id]") ?? []);
+      if (!rows.length) return;
+      const active = document.activeElement as HTMLElement | null;
+      const idx = rows.findIndex((r) => r === active);
+      if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Home" || e.key === "End") {
+        e.preventDefault();
+        const next = e.key === "Home" ? 0 : e.key === "End" ? rows.length - 1 : e.key === "ArrowDown" ? Math.min(rows.length - 1, idx + 1) : Math.max(0, idx - 1);
+        rows[next]?.focus();
+        rows[next]?.scrollIntoView({ block: "nearest" });
+      } else if (idx >= 0 && (e.key === "Enter" || e.key === " ")) {
+        e.preventDefault();
+        const id = rows[idx]!.dataset.id!;
+        if (e.key === "Enter") openDrawer(id);
+        else if (rows[idx]!.dataset.eligible === "1") toggleSelect(id);
+      }
+    },
+    [openDrawer, toggleSelect],
+  );
+
+  useEffect(() => {
+    if (!drawerId) return;
+    const row = bodyRef.current?.querySelector<HTMLTableRowElement>(`tr[data-id="${drawerId}"]`);
+    row?.scrollIntoView({ block: "nearest" });
+  }, [drawerId]);
 
   if (!projects.length) {
     return total === 0 ? (
@@ -70,16 +102,16 @@ export function ProjectTable({ projects }: { projects: Project[] }) {
           ))}
         </tr>
       </thead>
-      <tbody>
-        {projects.map((p) => (
-          <Row key={p.id} project={p} selected={selection.has(p.id)} />
+      <tbody ref={bodyRef} onKeyDown={onKeyDown}>
+        {projects.map((p, i) => (
+          <Row key={p.id} project={p} selected={selection.has(p.id)} first={i === 0} />
         ))}
       </tbody>
     </table>
   );
 }
 
-const Row = memo(function Row({ project: p, selected }: { project: Project; selected: boolean }) {
+const Row = memo(function Row({ project: p, selected, first }: { project: Project; selected: boolean; first: boolean }) {
   const toggleSelect = useAppStore((s) => s.toggleSelect);
   const openDrawer = useAppStore((s) => s.openDrawer);
   const drawerId = useAppStore((s) => s.drawerProjectId);
@@ -93,8 +125,12 @@ const Row = memo(function Row({ project: p, selected }: { project: Project; sele
 
   return (
     <tr
+      data-id={p.id}
+      data-eligible={eligible ? "1" : "0"}
+      tabIndex={first || drawerId === p.id ? 0 : -1}
+      aria-selected={selected}
       onClick={() => openDrawer(p.id)}
-      className={`group h-10 cursor-pointer border-b border-border transition-colors ${drawerId === p.id ? "bg-accent-soft/60" : selected ? "bg-accent-soft/30" : "hover:bg-surface-2"} ${ignored ? "opacity-60" : ""}`}
+      className={`group h-10 cursor-pointer border-b border-border outline-none transition-colors focus-visible:shadow-[inset_0_0_0_2px_var(--ring)] ${drawerId === p.id ? "bg-accent-soft/60" : selected ? "bg-accent-soft/30" : "hover:bg-surface-2"} ${ignored ? "opacity-60" : ""}`}
     >
       <td className="px-3">
         <Checkbox checked={selected} onChange={() => toggleSelect(p.id)} disabled={!eligible} title={p.protected ? "Protected projects are never bulk-selected" : ignored ? "Ignored" : undefined} />

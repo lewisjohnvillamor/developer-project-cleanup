@@ -1,4 +1,4 @@
-import type { Project, ProjectStatus, Stack } from "@/types";
+import { STACK_LABELS, type Project, type ProjectStatus, type Stack } from "@/types";
 import { daysSince } from "./format";
 
 export type SortKey = "name" | "stack" | "status" | "lastActive" | "totalBytes" | "reclaimableBytes" | "safety";
@@ -110,19 +110,7 @@ export function primaryLabel(p: Project): string {
   if (fw) return fw;
   const first = p.stacks[0];
   if (!first) return "Unknown";
-  const labels: Record<Stack, string> = {
-    node: "Node",
-    rust: "Rust",
-    python: "Python",
-    go: "Go",
-    maven: "Maven",
-    gradle: "Gradle",
-    dotnet: ".NET",
-    cocoapods: "CocoaPods",
-    dart: "Dart",
-    ruby: "Ruby",
-    php: "PHP",
-  };
+  const labels = STACK_LABELS;
   return labels[first];
 }
 

@@ -57,7 +57,7 @@ export function ProjectToolbar({ visible }: { visible: Project[] }) {
       <div className="flex items-center gap-2">
         <div className="relative w-72">
           <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-subtle" />
-          <TextInput value={filters.search} onChange={(v) => setFilters({ search: v })} placeholder="Search projects or paths" className="pl-8" />
+          <TextInput id="project-search" value={filters.search} onChange={(v) => setFilters({ search: v })} placeholder="Search projects or paths  ( / )" className="pl-8" />
           {filters.search && (
             <button type="button" onClick={() => setFilters({ search: "" })} className="absolute right-2 top-1/2 -translate-y-1/2 text-fg-subtle hover:text-fg" aria-label="Clear search">
               <X size={13} />

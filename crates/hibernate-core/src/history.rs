@@ -94,13 +94,17 @@ impl HistoryEntry {
         format!("{}-{nanos:04x}", now.format("%Y%m%d-%H%M%S"))
     }
 
-    /// True when at least one artifact is still sitting in quarantine.
+    /// True when at least one artifact can be brought back: it sits in
+    /// quarantine, or in the OS Trash on platforms that let us restore it.
     pub fn restorable(&self) -> bool {
+        let trash_ok = crate::cleanup::trash::trash_restore_supported();
         self.restored_at.is_none()
             && self.projects.iter().any(|p| {
-                p.artifacts
-                    .iter()
-                    .any(|a| matches!(a.outcome, ArtifactOutcome::Quarantined { .. }))
+                p.artifacts.iter().any(|a| match a.outcome {
+                    ArtifactOutcome::Quarantined { .. } => true,
+                    ArtifactOutcome::Trashed => trash_ok,
+                    _ => false,
+                })
             })
     }
 
@@ -149,5 +153,70 @@ impl HistoryStore {
 
     pub fn total_recovered(&self) -> u64 {
         self.entries.iter().map(|e| e.total_recovered).sum()
+    }
+}
+
+/// One row per finished scan, for the "reclaimable over time" trend.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanRecord {
+    pub at: DateTime<Utc>,
+    pub project_count: usize,
+    pub total_bytes: u64,
+    pub reclaimable_bytes: u64,
+    pub review_bytes: u64,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ScanTrend {
+    /// Oldest first.
+    pub records: Vec<ScanRecord>,
+}
+
+impl ScanTrend {
+    pub const MAX_RECORDS: usize = 365;
+
+    pub fn load(paths: &AppPaths) -> Self {
+        load_json(&paths.scan_trend_file)
+    }
+
+    pub fn save(&self, paths: &AppPaths) -> io::Result<()> {
+        save_json(&paths.scan_trend_file, self)
+    }
+
+    /// Append a record, replacing an earlier one from the same day so the
+    /// trend has at most one point per day.
+    pub fn push(&mut self, record: ScanRecord) {
+        let day = record.at.date_naive();
+        self.records.retain(|r| r.at.date_naive() != day);
+        self.records.push(record);
+        if self.records.len() > Self::MAX_RECORDS {
+            let excess = self.records.len() - Self::MAX_RECORDS;
+            self.records.drain(0..excess);
+        }
+    }
+}
+
+#[cfg(test)]
+mod trend_tests {
+    use super::*;
+
+    #[test]
+    fn one_point_per_day() {
+        let mut t = ScanTrend::default();
+        let now = Utc::now();
+        let rec = |at: DateTime<Utc>, r: u64| ScanRecord {
+            at,
+            project_count: 1,
+            total_bytes: 10,
+            reclaimable_bytes: r,
+            review_bytes: 0,
+        };
+        t.push(rec(now - chrono::Duration::days(1), 5));
+        t.push(rec(now, 1));
+        t.push(rec(now, 2));
+        assert_eq!(t.records.len(), 2);
+        assert_eq!(t.records.last().unwrap().reclaimable_bytes, 2);
     }
 }

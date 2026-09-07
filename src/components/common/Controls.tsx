@@ -62,9 +62,10 @@ export function Select<T extends string>({ value, onChange, options, className =
   );
 }
 
-export function TextInput({ value, onChange, placeholder, className = "", mono, type = "text", onKeyDown }: { value: string; onChange: (v: string) => void; placeholder?: string; className?: string; mono?: boolean; type?: string; onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void }) {
+export function TextInput({ value, onChange, placeholder, className = "", mono, type = "text", onKeyDown, id }: { value: string; onChange: (v: string) => void; placeholder?: string; className?: string; mono?: boolean; type?: string; onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void; id?: string }) {
   return (
     <input
+      id={id}
       type={type}
       value={value}
       placeholder={placeholder}
@@ -123,14 +124,30 @@ export interface MenuItem {
 export function Menu({ trigger, items, align = "left", className = "" }: { trigger: (open: boolean) => ReactNode; items: MenuItem[]; align?: "left" | "right"; className?: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const itemsEls = () => Array.from(listRef.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]:not([disabled])") ?? []);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        setOpen(false);
+        return;
+      }
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Home" && e.key !== "End") return;
+      const els = itemsEls();
+      if (!els.length) return;
+      e.preventDefault();
+      const idx = els.findIndex((el) => el === document.activeElement);
+      const next = e.key === "Home" ? 0 : e.key === "End" ? els.length - 1 : e.key === "ArrowDown" ? (idx + 1) % els.length : (idx - 1 + els.length) % els.length;
+      els[next]?.focus();
+    };
     window.addEventListener("mousedown", onDown);
     window.addEventListener("keydown", onKey);
+    itemsEls()[0]?.focus();
     return () => {
       window.removeEventListener("mousedown", onDown);
       window.removeEventListener("keydown", onKey);
@@ -138,17 +155,18 @@ export function Menu({ trigger, items, align = "left", className = "" }: { trigg
   }, [open]);
   return (
     <div ref={ref} className={`relative ${className}`}>
-      <div onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}>{trigger(open)}</div>
+      <div onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }} onKeyDown={(e) => { if (e.key === "ArrowDown" && !open) { e.preventDefault(); setOpen(true); } }}>{trigger(open)}</div>
       {open && (
-        <div role="menu" className={`fade-in absolute z-40 mt-1 min-w-52 rounded-lg border border-border bg-surface p-1 shadow-panel ${align === "right" ? "right-0" : "left-0"}`}>
+        <div ref={listRef} role="menu" className={`fade-in absolute z-40 mt-1 min-w-52 rounded-lg border border-border bg-surface p-1 shadow-panel ${align === "right" ? "right-0" : "left-0"}`}>
           {items.map((item, i) =>
             item.separator ? (
-              <div key={i} className="my-1 border-t border-border" />
+              <div key={i} role="separator" className="my-1 border-t border-border" />
             ) : (
               <button
                 key={i}
                 type="button"
                 role="menuitem"
+                tabIndex={-1}
                 disabled={item.disabled}
                 onClick={(e) => {
                   e.stopPropagation();

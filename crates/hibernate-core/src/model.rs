@@ -21,10 +21,16 @@ pub enum Stack {
     Dart,
     Ruby,
     Php,
+    Swift,
+    Elixir,
+    Haskell,
+    Zig,
+    Unity,
+    Terraform,
 }
 
 impl Stack {
-    pub const ALL: [Stack; 11] = [
+    pub const ALL: [Stack; 17] = [
         Stack::Node,
         Stack::Rust,
         Stack::Python,
@@ -36,6 +42,12 @@ impl Stack {
         Stack::Dart,
         Stack::Ruby,
         Stack::Php,
+        Stack::Swift,
+        Stack::Elixir,
+        Stack::Haskell,
+        Stack::Zig,
+        Stack::Unity,
+        Stack::Terraform,
     ];
 
     pub fn label(self) -> &'static str {
@@ -51,6 +63,12 @@ impl Stack {
             Stack::Dart => "Dart",
             Stack::Ruby => "Ruby",
             Stack::Php => "PHP",
+            Stack::Swift => "Swift",
+            Stack::Elixir => "Elixir",
+            Stack::Haskell => "Haskell",
+            Stack::Zig => "Zig",
+            Stack::Unity => "Unity",
+            Stack::Terraform => "Terraform",
         }
     }
 
@@ -70,6 +88,12 @@ impl Stack {
             "dart" | "flutter" => Stack::Dart,
             "ruby" | "bundler" => Stack::Ruby,
             "php" | "composer" => Stack::Php,
+            "swift" | "spm" => Stack::Swift,
+            "elixir" | "mix" | "phoenix" => Stack::Elixir,
+            "haskell" | "cabal" | "stack" => Stack::Haskell,
+            "zig" => Stack::Zig,
+            "unity" => Stack::Unity,
+            "terraform" | "opentofu" | "tofu" => Stack::Terraform,
             _ => return None,
         })
     }
@@ -252,6 +276,16 @@ pub struct Project {
     pub stacks: Vec<Stack>,
     /// Frameworks / flavours, e.g. `Next.js`, `TypeScript`, `Flutter`.
     pub frameworks: Vec<String>,
+    /// Relative paths of workspace members folded into this project
+    /// (`apps/web`, `crates/core`, …).
+    #[serde(default)]
+    pub workspace_members: Vec<String>,
+    /// How long measuring this project took, for slow-folder hints.
+    #[serde(default)]
+    pub scan_duration_ms: u64,
+    /// Artifact trees whose sizes were reused from the previous scan.
+    #[serde(default)]
+    pub cache_hits: u32,
     pub package_manager: Option<String>,
     pub total_bytes: u64,
     /// Bytes in green (safe) artifacts.

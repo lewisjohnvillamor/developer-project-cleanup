@@ -52,6 +52,20 @@ impl From<DispositionArg> for Disposition {
     }
 }
 
+#[derive(Copy, Clone, ValueEnum)]
+enum ExportArg {
+    Csv,
+    Json,
+}
+
+#[derive(Subcommand)]
+enum QuarantineAction {
+    /// Show every batch with its size.
+    List,
+    /// Permanently delete one batch by entry id.
+    Purge { entry_id: String },
+}
+
 #[derive(Subcommand)]
 enum Command {
     /// Scan folders and list projects with their reclaimable space.
@@ -73,6 +87,29 @@ enum Command {
         /// Only show projects with at least this many reclaimable megabytes.
         #[arg(long, default_value_t = 0)]
         min_mb: u64,
+        /// Ignore cached sizes and measure every folder again.
+        #[arg(long)]
+        full: bool,
+    },
+    /// Show global toolchain caches (Cargo registry, npm cache, …) and how to clean them.
+    Caches {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Export the project table as CSV or JSON.
+    Export {
+        /// Folders to scan. Defaults to the folders saved in Settings.
+        roots: Vec<PathBuf>,
+        #[arg(long, value_enum, default_value_t = ExportArg::Csv)]
+        format: ExportArg,
+        /// Write to this file instead of stdout.
+        #[arg(short, long)]
+        out: Option<PathBuf>,
+    },
+    /// List or purge quarantine batches.
+    Quarantine {
+        #[command(subcommand)]
+        action: QuarantineAction,
     },
     /// Remove regeneratable artifacts from selected projects.
     Hibernate {
@@ -144,6 +181,7 @@ fn main() {
             threads,
             follow_symlinks,
             min_mb,
+            full,
         } => {
             let roots = roots_or_saved(roots, &settings);
             let mut opts = settings.scan_options();
@@ -152,7 +190,105 @@ fn main() {
                 opts.max_concurrency = t;
             }
             opts.follow_symlinks = follow_symlinks || opts.follow_symlinks;
-            cmd_scan(&roots, &opts, &state, json, min_mb)
+            let cache = load_cache(&paths, &settings, full);
+            opts.tree_cache = cache.clone();
+            let code = cmd_scan(&roots, &opts, &state, json, min_mb);
+            save_cache(&paths, cache);
+            code
+        }
+        Command::Caches { json } => {
+            let cancel = Arc::new(AtomicBool::new(false));
+            install_ctrl_c(cancel.clone());
+            let caches = hibernate_core::caches::measure_caches(&cancel);
+            if json {
+                println!("{}", serde_json::to_string_pretty(&caches).unwrap());
+            } else {
+                println!("Global toolchain caches (never removed by hibernate)\n");
+                for c in caches.iter().filter(|c| c.exists) {
+                    println!(
+                        "{:<28}{:>10}   {}",
+                        c.label,
+                        format::bytes(c.bytes),
+                        c.path.display()
+                    );
+                    if let Some(cmd) = &c.clean_command {
+                        println!("{:<28}{:>10}   clean: {cmd}", "", "");
+                    }
+                }
+                let total: u64 = caches.iter().map(|c| c.bytes).sum();
+                println!("\n{} in caches total", format::bytes(total));
+            }
+            0
+        }
+        Command::Export {
+            roots,
+            format: fmt,
+            out,
+        } => {
+            let roots = roots_or_saved(roots, &settings);
+            let mut opts = settings.scan_options();
+            let cache = load_cache(&paths, &settings, false);
+            opts.tree_cache = cache.clone();
+            let result = run_scan(&roots, &opts, &state, out.is_some());
+            save_cache(&paths, cache);
+            let text = hibernate_core::export::render(
+                &result.projects,
+                match fmt {
+                    ExportArg::Csv => hibernate_core::export::ExportFormat::Csv,
+                    ExportArg::Json => hibernate_core::export::ExportFormat::Json,
+                },
+            );
+            match out {
+                Some(path) => match std::fs::write(&path, text) {
+                    Ok(()) => {
+                        println!(
+                            "Wrote {} projects to {}",
+                            result.projects.len(),
+                            path.display()
+                        );
+                        0
+                    }
+                    Err(err) => {
+                        eprintln!("error: {}: {err}", path.display());
+                        1
+                    }
+                },
+                None => {
+                    print!("{text}");
+                    0
+                }
+            }
+        }
+        Command::Quarantine { action } => {
+            let q = Quarantine::new(&paths.quarantine_dir);
+            match action {
+                QuarantineAction::List => {
+                    let batches = q.list_batches();
+                    if batches.is_empty() {
+                        println!("Quarantine is empty.");
+                    }
+                    for b in &batches {
+                        println!(
+                            "{}   {}   {:>10}   {}",
+                            b.entry_id,
+                            b.date,
+                            format::bytes(b.bytes),
+                            b.projects.join(", ")
+                        );
+                    }
+                    0
+                }
+                QuarantineAction::Purge { entry_id } => match q.purge_batch(&entry_id) {
+                    Ok(bytes) => {
+                        println!("Purged {entry_id} ({})", format::bytes(bytes));
+                        0
+                    }
+                    Err(err) => {
+                        eprintln!("error: {err}");
+                        1
+                    }
+                },
+            }
         }
         Command::Hibernate {
             roots,
@@ -209,6 +345,31 @@ fn main() {
         }
     };
     std::process::exit(code);
+}
+
+fn load_cache(
+    paths: &AppPaths,
+    settings: &Settings,
+    full: bool,
+) -> Option<Arc<Mutex<hibernate_core::scanner::TreeCache>>> {
+    if !settings.incremental_scans {
+        return None;
+    }
+    let mut cache = hibernate_core::scanner::TreeCache::load(&paths.tree_cache_file);
+    if full {
+        cache.clear();
+    }
+    Some(Arc::new(Mutex::new(cache)))
+}
+
+fn save_cache(paths: &AppPaths, cache: Option<Arc<Mutex<hibernate_core::scanner::TreeCache>>>) {
+    if let Some(cache) = cache {
+        if let Ok(c) = cache.lock() {
+            if let Err(err) = c.save(&paths.tree_cache_file) {
+                eprintln!("warning: could not save size cache: {err}");
+            }
+        }
+    }
 }
 
 fn roots_or_saved(roots: Vec<PathBuf>, settings: &Settings) -> Vec<PathBuf> {
@@ -328,7 +489,18 @@ fn cmd_scan(
         }
     }
     println!();
-    println!("Scanned in {:.1}s", s.duration_ms as f64 / 1000.0);
+    println!(
+        "Scanned in {:.1}s{}",
+        s.duration_ms as f64 / 1000.0,
+        if s.cache_hits > 0 {
+            format!(
+                " · {} folder sizes reused from the previous scan",
+                s.cache_hits
+            )
+        } else {
+            String::new()
+        }
+    );
     if result.cancelled {
         println!("(scan cancelled — results are partial)");
         130
@@ -410,8 +582,11 @@ fn cmd_hibernate(
         eprintln!("error: choose projects with --select <name|path> or --all-dormant");
         return 2;
     }
-    let opts = settings.scan_options();
+    let mut opts = settings.scan_options();
+    let cache = load_cache(paths, settings, false);
+    opts.tree_cache = cache.clone();
     let result = run_scan(roots, &opts, state, true);
+    save_cache(paths, cache);
     if result.cancelled {
         eprintln!("scan cancelled");
         return 130;
@@ -658,6 +833,9 @@ fn cmd_wake(settings: &Settings, state: &AppState, path: &Path, run: bool, yes: 
     println!("These run inside: {}", plan.cwd.display());
     for note in &plan.notes {
         println!("  {note}");
+    }
+    for tool in &plan.missing_tools {
+        println!("  ! `{tool}` was not found on PATH");
     }
     if !run {
         println!();

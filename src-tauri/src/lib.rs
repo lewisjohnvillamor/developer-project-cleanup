@@ -7,6 +7,7 @@
 //! - `projects-updated`  — `Vec<Project>` whose cached state changed
 
 mod commands;
+mod scheduler;
 mod state;
 
 use state::AppCtx;
@@ -19,11 +20,14 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(ctx.clone())
-        .setup(move |_app| {
+        .setup(move |app| {
             // Expire old quarantine batches in the background.
-            let ctx = ctx.clone();
-            std::thread::spawn(move || ctx.purge_quarantine());
+            let purge_ctx = ctx.clone();
+            std::thread::spawn(move || purge_ctx.purge_quarantine());
+            // Scheduled background scans.
+            scheduler::start(app.handle().clone(), ctx.clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -36,6 +40,15 @@ pub fn run() {
             commands::scan::get_last_scan,
             commands::scan::start_scan,
             commands::scan::cancel_scan,
+            commands::scan::get_scan_trend,
+            commands::scan::get_cache_info,
+            commands::scan::clear_tree_cache,
+            commands::tools::get_global_caches,
+            commands::tools::preview_rule,
+            commands::tools::export_projects,
+            commands::tools::list_quarantine,
+            commands::tools::purge_quarantine_batch,
+            commands::tools::get_diagnostics,
             commands::scan::set_protected,
             commands::scan::ignore_project,
             commands::scan::unignore_project,

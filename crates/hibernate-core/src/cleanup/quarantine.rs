@@ -10,6 +10,17 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuarantineBatch {
+    pub entry_id: String,
+    pub date: String,
+    pub path: PathBuf,
+    pub bytes: u64,
+    pub file_count: u64,
+    pub projects: Vec<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Quarantine {
     root: PathBuf,
@@ -134,6 +145,74 @@ impl Quarantine {
         removed
     }
 
+    /// Every batch on disk, newest first.
+    pub fn list_batches(&self) -> Vec<QuarantineBatch> {
+        let mut out = Vec::new();
+        let Ok(days) = fs::read_dir(&self.root) else {
+            return out;
+        };
+        for day in days.flatten() {
+            let day_name = day.file_name().to_string_lossy().into_owned();
+            if NaiveDate::parse_from_str(&day_name, "%Y-%m-%d").is_err() {
+                continue;
+            }
+            let Ok(batches) = fs::read_dir(day.path()) else {
+                continue;
+            };
+            for batch in batches.flatten() {
+                if !batch.path().is_dir() {
+                    continue;
+                }
+                let projects: Vec<String> = fs::read_dir(batch.path())
+                    .map(|it| {
+                        it.flatten()
+                            .filter(|e| e.path().is_dir())
+                            .map(|e| e.file_name().to_string_lossy().into_owned())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let size =
+                    crate::scanner::size::measure_tree(&batch.path(), &AtomicBool::new(false));
+                out.push(QuarantineBatch {
+                    entry_id: batch.file_name().to_string_lossy().into_owned(),
+                    date: day_name.clone(),
+                    path: batch.path(),
+                    bytes: size.bytes,
+                    file_count: size.files,
+                    projects,
+                });
+            }
+        }
+        out.sort_by(|a, b| b.entry_id.cmp(&a.entry_id));
+        out
+    }
+
+    /// Permanently delete one batch. The path must be inside the quarantine.
+    pub fn purge_batch(&self, entry_id: &str) -> io::Result<u64> {
+        let batch = self
+            .list_batches()
+            .into_iter()
+            .find(|b| b.entry_id == entry_id)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no such quarantine batch"))?;
+        if !batch.path.starts_with(&self.root) || batch.path == self.root {
+            return Err(io::Error::other(
+                "refusing to purge outside the quarantine folder",
+            ));
+        }
+        let report = remove_tree(&batch.path, &AtomicBool::new(false));
+        if !report.failed.is_empty() {
+            return Err(io::Error::other(format!(
+                "{} item(s) could not be removed",
+                report.failed.len()
+            )));
+        }
+        // Remove the day folder when it is empty.
+        if let Some(day) = batch.path.parent() {
+            let _ = fs::remove_dir(day);
+        }
+        Ok(report.bytes_removed)
+    }
+
     /// Bytes currently held in quarantine.
     pub fn size(&self) -> u64 {
         crate::scanner::size::measure_tree(&self.root, &AtomicBool::new(false)).bytes
@@ -235,6 +314,32 @@ mod tests {
         assert!(!dest.exists());
         // Restoring twice fails cleanly.
         assert!(q.restore(&dest, &nm).is_err());
+    }
+
+    #[test]
+    fn lists_and_purges_batches() {
+        let tmp = tempdir().unwrap();
+        let q = Quarantine::new(&tmp.path().join("quarantine"));
+        let src = tmp.path().join("web/node_modules");
+        fs::create_dir_all(&src).unwrap();
+        fs::write(src.join("a.js"), "xx").unwrap();
+        let batch = q.batch_dir("e1", Utc::now());
+        q.quarantine(
+            &batch,
+            "web",
+            "node_modules/",
+            &src,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        let batches = q.list_batches();
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0].entry_id, "e1");
+        assert_eq!(batches[0].projects, vec!["web"]);
+        assert_eq!(batches[0].bytes, 2);
+        assert!(q.purge_batch("nope").is_err());
+        assert_eq!(q.purge_batch("e1").unwrap(), 2);
+        assert!(q.list_batches().is_empty());
     }
 
     #[test]

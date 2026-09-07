@@ -2,7 +2,9 @@ import { ArrowRight, FolderPlus, Moon, Search, ShieldCheck, Sparkles } from "luc
 import { Button } from "@/components/common/Button";
 import { Card } from "@/components/common/Card";
 import { StatusBadge } from "@/components/common/Badge";
+import { GlobalCaches } from "@/components/storage/GlobalCaches";
 import { RecentCleanup } from "@/components/storage/RecentCleanup";
+import { ReclaimTrend } from "@/components/storage/ReclaimTrend";
 import { StorageBreakdown } from "@/components/storage/StorageBreakdown";
 import { StorageSummary } from "@/components/storage/StorageSummary";
 import { useAppStore } from "@/stores/app-store";
@@ -139,9 +141,12 @@ export function OverviewPage() {
           </Card>
           <div className="flex flex-col gap-4">
             <StorageBreakdown />
+            <ReclaimTrend />
             <RecentCleanup />
           </div>
         </div>
+
+        <GlobalCaches />
 
         <div className="grid grid-cols-4 gap-3">
           {(["active", "dormant", "hibernated", "protected"] as const).map((status) => {

@@ -20,6 +20,8 @@ pub struct DiscoveredProject {
     /// The enclosing project, when nested.
     pub parent: Option<PathBuf>,
     pub detection: Detection,
+    /// Workspace members folded into this project, relative to its root.
+    pub members: Vec<String>,
 }
 
 pub struct DiscoveryOptions<'a> {
@@ -34,6 +36,16 @@ struct Frame {
     depth: usize,
     /// Index into the found list of the enclosing project.
     project: Option<usize>,
+}
+
+/// `apps/web` style relative path with forward slashes.
+pub fn relative_slash(base: &Path, path: &Path) -> String {
+    path.strip_prefix(base)
+        .unwrap_or(path)
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 pub fn is_default_ignored(name: &str) -> bool {
@@ -84,14 +96,23 @@ pub fn discover(
         let mut current = frame.project;
         if let Some(det) = detect(&frame.path, &entries) {
             let absorbed = current
-                .map(|i| found[i].detection.absorbs(&det))
+                .map(|i| {
+                    let relative = relative_slash(&found[i].path, &frame.path);
+                    found[i].detection.absorbs(&det, &relative)
+                })
                 .unwrap_or(false);
-            if !absorbed {
+            if absorbed {
+                if let Some(i) = current {
+                    let relative = relative_slash(&found[i].path, &frame.path);
+                    found[i].members.push(relative);
+                }
+            } else {
                 let dp = DiscoveredProject {
                     path: frame.path.clone(),
                     scan_root: root.to_path_buf(),
                     parent: current.map(|i| found[i].path.clone()),
                     detection: det,
+                    members: Vec::new(),
                 };
                 on_found(&dp);
                 found.push(dp);
@@ -234,6 +255,34 @@ mod tests {
         assert_eq!(paths, vec!["mono", "mono/tools/cli"]);
         let cli = found.iter().find(|p| p.path.ends_with("cli")).unwrap();
         assert_eq!(cli.parent.as_deref(), Some(r.join("mono").as_path()));
+        let mono = found.iter().find(|p| p.path.ends_with("mono")).unwrap();
+        assert_eq!(mono.members, vec!["apps/api", "apps/web"]);
+    }
+
+    #[test]
+    fn workspace_globs_limit_what_is_absorbed() {
+        let tmp = tempdir().unwrap();
+        let r = tmp.path();
+        touch(
+            &r.join("mono/package.json"),
+            r#"{"workspaces":["packages/*"]}"#,
+        );
+        touch(&r.join("mono/packages/ui/package.json"), "{}");
+        // Not a declared member: a separate project.
+        touch(&r.join("mono/examples/demo/package.json"), "{}");
+        let found = run(r, false);
+        let mut paths: Vec<String> = found
+            .iter()
+            .map(|p| {
+                p.path
+                    .strip_prefix(r)
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        paths.sort();
+        assert_eq!(paths, vec!["mono", "mono/examples/demo"]);
     }
 
     #[test]

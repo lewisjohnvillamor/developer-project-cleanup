@@ -1,11 +1,11 @@
-import { useState } from "react";
-import { Folder, FolderPlus, Plus, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ClipboardCopy, Download, Eraser, Folder, FolderPlus, Loader2, Plus, Search, Trash2 } from "lucide-react";
 import { Button, IconButton } from "@/components/common/Button";
 import { Card } from "@/components/common/Card";
 import { NumberInput, RadioGroup, Select, TextInput, Toggle } from "@/components/common/Controls";
 import { Badge, SafetyBadge } from "@/components/common/Badge";
 import { useAppStore } from "@/stores/app-store";
-import { CATEGORY_LABELS, STACK_LABELS, type CleanupRule, type Disposition, type Stack, type Theme } from "@/types";
+import { CATEGORY_LABELS, STACK_LABELS, type CleanupRule, type Disposition, type RuleMatch, type Stack, type Theme } from "@/types";
 import { formatBytes } from "@/utils/format";
 
 const BUILTIN_RULES: { pattern: string; stacks: string; safety: "safe" | "review"; why: string }[] = [
@@ -18,7 +18,9 @@ const BUILTIN_RULES: { pattern: string; stacks: string; safety: "safe" | "review
   { pattern: ".venv/ venv/", stacks: "Python", safety: "review", why: "Virtual environments may contain hand-installed packages." },
   { pattern: "bin/ obj/", stacks: ".NET", safety: "safe", why: "MSBuild output." },
   { pattern: ".dart_tool/", stacks: "Dart", safety: "safe", why: "Pub tooling cache." },
-  { pattern: "Pods/ vendor/ .gradle/", stacks: "CocoaPods · Go · PHP · Ruby · Gradle", safety: "review", why: "Sometimes committed or patched on purpose." },
+  { pattern: "Pods/ vendor/ .gradle/ deps/ .terraform/", stacks: "CocoaPods · Go · PHP · Ruby · Gradle · Elixir · Terraform", safety: "review", why: "Sometimes committed or patched on purpose." },
+  { pattern: ".build/ _build/ dist-newstyle/ .stack-work/ zig-out/ zig-cache/", stacks: "Swift · Elixir · Haskell · Zig", safety: "safe", why: "Compiler output." },
+  { pattern: "Library/ Temp/ Logs/", stacks: "Unity", safety: "safe", why: "Editor caches, regenerated when the project opens." },
 ];
 
 function Section({ title, children, description }: { title: string; description?: string; children: React.ReactNode }) {
@@ -78,7 +80,33 @@ export function SettingsPage() {
   const info = useAppStore((s) => s.info);
   const setAddFoldersOpen = useAppStore((s) => s.setAddFoldersOpen);
   const removeScanRoot = useAppStore((s) => s.removeScanRoot);
+  const backend = useAppStore((s) => s.backend);
+  const cacheEntries = useAppStore((s) => s.cacheEntries);
+  const clearCache = useAppStore((s) => s.clearCache);
+  const exportProjects = useAppStore((s) => s.exportProjects);
+  const copyDiagnostics = useAppStore((s) => s.copyDiagnostics);
+  const projectCount = useAppStore((s) => s.projects.length);
   const [ruleDraft, setRuleDraft] = useState<{ pattern: string; safety: "safe" | "review"; stacks: Stack | "any"; explanation: string }>({ pattern: "", safety: "safe", stacks: "any", explanation: "" });
+  const [preview, setPreview] = useState<{ matches: RuleMatch[]; loading: boolean; pattern: string }>({ matches: [], loading: false, pattern: "" });
+
+  // Preview which folders a draft rule would match, debounced.
+  useEffect(() => {
+    const pattern = ruleDraft.pattern.trim();
+    if (!backend || !pattern || pattern.includes("/") || pattern.includes("\\") || !projectCount) {
+      setPreview({ matches: [], loading: false, pattern });
+      return;
+    }
+    setPreview((p) => ({ ...p, loading: true, pattern }));
+    const t = setTimeout(async () => {
+      try {
+        const matches = await backend.previewRule(pattern, ruleDraft.stacks === "any" ? [] : [ruleDraft.stacks]);
+        setPreview({ matches, loading: false, pattern });
+      } catch {
+        setPreview({ matches: [], loading: false, pattern });
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [backend, ruleDraft.pattern, ruleDraft.stacks, projectCount]);
 
   const addRule = () => {
     const pattern = ruleDraft.pattern.trim();
@@ -157,6 +185,59 @@ export function SettingsPage() {
           <Toggle checked={settings.followSymlinks} onChange={(v) => save({ followSymlinks: v })} label="Follow symbolic links" description="Off by default. Every folder is still visited at most once." />
           <Toggle checked={settings.scanHidden} onChange={(v) => save({ scanHidden: v })} label="Scan hidden folders for projects" description="Hidden artifact folders like .next/ are always measured." />
           <Toggle checked={settings.inspectGit} onChange={(v) => save({ inspectGit: v })} label="Check Git working tree status" description={info?.gitAvailable === false ? "git was not found on this machine." : "Runs `git status` per repository to flag uncommitted changes."} disabled={info?.gitAvailable === false} />
+          <Toggle
+            checked={settings.incrementalScans}
+            onChange={(v) => save({ incrementalScans: v })}
+            label="Incremental scans"
+            description={`Reuse the size of node_modules/, target/ and other big folders when their contents have not changed. ${cacheEntries ? `${cacheEntries} folder${cacheEntries === 1 ? "" : "s"} cached.` : ""}`}
+          />
+          <div className="flex items-center justify-between py-2">
+            <div>
+              <div className="text-[13px] font-medium text-fg">Cached folder sizes</div>
+              <div className="text-[12px] text-fg-muted">Clear them if a size looks wrong; the next scan measures everything again.</div>
+            </div>
+            <Button size="sm" variant="outline" icon={<Eraser size={13} />} onClick={clearCache} disabled={!cacheEntries}>
+              Clear cache
+            </Button>
+          </div>
+          <div className="flex items-center justify-between py-2">
+            <div>
+              <div className="text-[13px] font-medium text-fg">Scheduled scans</div>
+              <div className="text-[12px] text-fg-muted">
+                Rescan in the background while the app is open and notify when at least {formatBytes(settings.notifyThresholdBytes)} is reclaimable.
+                {info?.platform === "browser" ? " (Not available in the browser preview.)" : ""}
+              </div>
+            </div>
+            <Select<string>
+              value={String(settings.scheduledScanHours)}
+              onChange={(v) => save({ scheduledScanHours: Number(v) })}
+              options={[
+                { value: "0", label: "Off" },
+                { value: "24", label: "Daily" },
+                { value: "168", label: "Weekly" },
+                { value: "720", label: "Monthly" },
+              ]}
+              className="w-32"
+            />
+          </div>
+          {settings.scheduledScanHours > 0 && (
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <div className="text-[13px] font-medium text-fg">Notify when reclaimable is at least</div>
+              </div>
+              <Select<string>
+                value={String(settings.notifyThresholdBytes)}
+                onChange={(v) => save({ notifyThresholdBytes: Number(v) })}
+                options={[
+                  { value: "500000000", label: "500 MB" },
+                  { value: "1000000000", label: "1 GB" },
+                  { value: "5000000000", label: "5 GB" },
+                  { value: "20000000000", label: "20 GB" },
+                ]}
+                className="w-32"
+              />
+            </div>
+          )}
         </Section>
 
         <Section title="Safety" description="Hibernate never removes source files. This controls where the regeneratable folders go.">
@@ -229,6 +310,28 @@ export function SettingsPage() {
                 Add
               </Button>
             </div>
+            {ruleDraft.pattern.trim() && (
+              <div className="mt-2 rounded-md border border-dashed border-border px-3 py-2 text-[12px]">
+                <div className="mb-1 flex items-center gap-1.5 text-fg-muted">
+                  {preview.loading ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
+                  {!projectCount
+                    ? "Scan your projects to preview what this rule would match."
+                    : preview.loading
+                      ? "Looking for matches in the last scan…"
+                      : preview.matches.length
+                        ? `Would match ${preview.matches.length}${preview.matches.length >= 40 ? "+" : ""} folder${preview.matches.length === 1 ? "" : "s"} · ${formatBytes(preview.matches.reduce((s, m) => s + m.bytes, 0))}`
+                        : "No folder in the last scan matches this name."}
+                </div>
+                {preview.matches.slice(0, 8).map((m) => (
+                  <div key={m.path} className="flex items-center justify-between gap-3 py-0.5">
+                    <span className="truncate">
+                      <span className="text-fg">{m.projectName}</span> <span className="font-mono text-fg-subtle">{m.relativePath}</span>
+                    </span>
+                    <span className="tabular text-fg-muted">{formatBytes(m.bytes)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div className="py-2">
             <div className="text-[13px] font-medium text-fg">Protected names</div>
@@ -241,6 +344,32 @@ export function SettingsPage() {
             <div className="text-[13px] font-medium text-fg">Ignored folders</div>
             <div className="text-[12px] text-fg-muted">Absolute paths the scanner never enters.</div>
             <ListEditor items={settings.ignoredPaths} onChange={(v) => save({ ignoredPaths: v })} placeholder={info?.platform === "windows" ? "C:\\Users\\me\\Projects\\archive" : "/home/me/Projects/archive"} />
+          </div>
+        </Section>
+
+        <Section title="Data">
+          <div className="flex items-center justify-between py-2">
+            <div>
+              <div className="text-[13px] font-medium text-fg">Export project table</div>
+              <div className="text-[12px] text-fg-muted">Every scanned project with sizes, activity, Git state and artifacts.</div>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" icon={<Download size={13} />} onClick={() => exportProjects("csv")} disabled={!projectCount}>
+                CSV
+              </Button>
+              <Button size="sm" variant="outline" icon={<Download size={13} />} onClick={() => exportProjects("json")} disabled={!projectCount}>
+                JSON
+              </Button>
+            </div>
+          </div>
+          <div className="flex items-center justify-between py-2">
+            <div>
+              <div className="text-[13px] font-medium text-fg">Diagnostics</div>
+              <div className="text-[12px] text-fg-muted">Version, platform, settings and scan warnings for bug reports. No file contents or project names.</div>
+            </div>
+            <Button size="sm" variant="outline" icon={<ClipboardCopy size={13} />} onClick={copyDiagnostics}>
+              Copy diagnostics
+            </Button>
           </div>
         </Section>
 

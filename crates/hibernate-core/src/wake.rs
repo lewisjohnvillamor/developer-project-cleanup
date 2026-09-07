@@ -41,6 +41,42 @@ pub struct WakePlan {
     pub package_manager: Option<String>,
     pub steps: Vec<WakeStep>,
     pub notes: Vec<String>,
+    /// Programs the steps need that are not on PATH.
+    #[serde(default)]
+    pub missing_tools: Vec<String>,
+}
+
+/// Whether `program` can be started: an absolute/relative path that exists,
+/// or a name found on PATH (honouring PATHEXT on Windows).
+pub fn tool_available(program: &str, cwd: &Path) -> bool {
+    let p = Path::new(program);
+    if p.components().count() > 1 || p.is_absolute() {
+        return cwd.join(p).exists() || p.exists();
+    }
+    let Some(path_var) = std::env::var_os("PATH") else {
+        return false;
+    };
+    let exts: Vec<String> = if cfg!(windows) {
+        std::env::var("PATHEXT")
+            .unwrap_or_else(|_| ".EXE;.CMD;.BAT;.COM".into())
+            .split(';')
+            .map(|e| e.to_ascii_lowercase())
+            .collect()
+    } else {
+        vec![String::new()]
+    };
+    for dir in std::env::split_paths(&path_var) {
+        for ext in &exts {
+            let candidate = dir.join(format!("{program}{ext}"));
+            if candidate.is_file() {
+                return true;
+            }
+        }
+        if cfg!(windows) && dir.join(program).is_file() {
+            return true;
+        }
+    }
+    false
 }
 
 /// The install command for a Node package manager, honouring the lockfile.
@@ -127,6 +163,22 @@ pub fn plan_for(project: &Project) -> Option<WakePlan> {
             }
             Stack::Ruby => steps.push(WakeStep::new("bundle", &["install"])),
             Stack::Php => steps.push(WakeStep::new("composer", &["install"])),
+            Stack::Swift => steps.push(WakeStep::new("swift", &["build"])),
+            Stack::Elixir => {
+                steps.push(WakeStep::new("mix", &["deps.get"]));
+                steps.push(WakeStep::new("mix", &["compile"]));
+            }
+            Stack::Haskell => {
+                if pm == Some("stack") {
+                    steps.push(WakeStep::new("stack", &["build"]));
+                } else {
+                    steps.push(WakeStep::new("cabal", &["build"]));
+                }
+            }
+            Stack::Zig => steps.push(WakeStep::new("zig", &["build"])),
+            Stack::Unity => notes
+                .push("Open the project in the Unity editor to rebuild its Library folder.".into()),
+            Stack::Terraform => steps.push(WakeStep::new("terraform", &["init"])),
         }
     }
 
@@ -138,6 +190,14 @@ pub fn plan_for(project: &Project) -> Option<WakePlan> {
             .push("A fresh virtual environment is created in .venv/ if one does not exist.".into());
     }
     notes.push("Commands run inside the project folder and nothing else.".into());
+    let mut missing_tools: Vec<String> = steps
+        .iter()
+        .map(|s| s.program.clone())
+        .filter(|p| !tool_available(p, path))
+        // Interpreters created by an earlier step are checked at run time.
+        .filter(|p| *p != VENV_PYTHON)
+        .collect();
+    missing_tools.dedup();
 
     Some(WakePlan {
         project_id: project.id.clone(),
@@ -145,6 +205,7 @@ pub fn plan_for(project: &Project) -> Option<WakePlan> {
         package_manager: project.package_manager.clone(),
         steps,
         notes,
+        missing_tools,
     })
 }
 
@@ -257,6 +318,18 @@ mod tests {
             python_steps(tmp.path(), Some("poetry"))[0].display,
             "poetry install"
         );
+    }
+
+    #[test]
+    fn detects_missing_tools() {
+        assert!(tool_available(
+            if cfg!(windows) { "cmd" } else { "sh" },
+            Path::new(".")
+        ));
+        assert!(!tool_available(
+            "definitely-not-a-real-tool-9f3a",
+            Path::new(".")
+        ));
     }
 
     #[cfg(unix)]

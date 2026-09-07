@@ -1,6 +1,6 @@
 use crate::state::AppCtx;
 use chrono::Utc;
-use hibernate_core::cleanup::trash::trash_available;
+use hibernate_core::cleanup::trash::{trash_available, trash_restore_supported};
 use hibernate_core::git::git_available;
 use serde::Serialize;
 use std::path::PathBuf;
@@ -19,6 +19,8 @@ pub struct AppInfo {
     pub quarantine_bytes: u64,
     pub git_available: bool,
     pub trash_available: bool,
+    /// Whether items sent to the OS Trash can be restored from History.
+    pub trash_restore_supported: bool,
     pub home_dir: Option<PathBuf>,
 }
 
@@ -32,6 +34,7 @@ pub fn get_app_info(ctx: State<'_, Arc<AppCtx>>) -> AppInfo {
         quarantine_bytes: ctx.quarantine().size(),
         git_available: git_available(),
         trash_available: trash_available(),
+        trash_restore_supported: trash_restore_supported(),
         home_dir: dirs::home_dir(),
     }
 }

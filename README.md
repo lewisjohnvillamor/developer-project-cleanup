@@ -23,14 +23,21 @@ No account, no cloud, no telemetry. Nothing leaves your machine.
 - **Scans** one or more folders and finds project roots by their markers
   (`package.json`, `Cargo.toml`, `pyproject.toml`, `go.mod`, `pom.xml`,
   `build.gradle`, `*.sln`/`*.csproj`, `Podfile`, `pubspec.yaml`, `Gemfile`,
-  `composer.json`). Nested projects and monorepos are handled: workspace
-  members are folded into their root so shared `node_modules/` is never
-  double-counted, while a `frontend/` + `backend/` pair under a plain folder
-  become two projects.
+  `composer.json`, `Package.swift`, `mix.exs`, `*.cabal`/`stack.yaml`,
+  `build.zig`, Unity `ProjectSettings/`, `*.tf`). Nested projects and
+  monorepos are handled: the members a workspace declares (npm/pnpm
+  `workspaces`, Cargo `members`, Gradle `include`, Maven modules, `.sln`
+  projects, `go.work`) fold into their root so shared `node_modules/` is never
+  double-counted, while anything else nested stays its own project.
 - **Measures** total and reclaimable size per project on a bounded thread pool.
   Projects appear in the UI as soon as they are measured, before the scan is
   finished. Symlinks are never followed unless you opt in, and even then every
   directory is visited at most once.
+- **Rescans incrementally.** Big trees (`node_modules/`, `target/`, `.git/`)
+  are fingerprinted from two levels of modification times; when nothing
+  changed, the previous size is reused instead of walking every file. "Full
+  rescan" bypasses the cache, and a scheduled scan can run in the background
+  with a notification when enough space is reclaimable.
 - **Classifies** every candidate folder with a declarative rule:
   green *Safe* (regenerated from committed inputs), amber *Review*
   (`.venv/`, `Pods/`, `vendor/`, `.gradle/`: usually fine, never bulk-selected
@@ -53,6 +60,12 @@ No account, no cloud, no telemetry. Nothing leaves your machine.
 - Computes **last activity** from the newest source edit and the last commit.
   Generated directories are excluded, so a stale `.next/cache` can't make an
   abandoned project look alive.
+- **Shows, never touches, global caches** (Cargo registry, npm cache, pnpm
+  store, pip, uv, Go modules, Gradle, Maven, Composer, CocoaPods) with each
+  tool's own clean command.
+- **Exports** the project table as CSV or JSON, tracks reclaimable space over
+  time, and has a command palette (Ctrl/Cmd+K) with keyboard shortcuts for
+  everything.
 
 ## Safety model
 
@@ -109,6 +122,8 @@ cargo run -p hibernate-cli -- wake ~/Projects/BrowserSnaps
 
 # UI in a browser with mock data
 npm run dev                      # http://localhost:1420
+npm test                         # Vitest: utilities + the store against the mock backend
+npm run e2e                      # Playwright walkthrough (needs the dev server running)
 
 # Desktop app
 npm run tauri dev
@@ -122,7 +137,7 @@ the `tauri` commands.
 ### CLI
 
 ```text
-hibernate scan <folders…> [--json] [--no-git] [--threads N] [--min-mb N]
+hibernate scan <folders…> [--json] [--no-git] [--threads N] [--min-mb N] [--full]
 hibernate hibernate <folders…> --select <name|path>… | --all-dormant
                     [--dry-run] [--disposition trash|quarantine|permanent]
                     [--include-review] [-y]
@@ -130,6 +145,9 @@ hibernate wake <project> [--run] [-y]
 hibernate history [--json]
 hibernate restore <entry-id>
 hibernate protect <project> [--off]
+hibernate caches [--json]
+hibernate export <folders…> [--format csv|json] [--out file]
+hibernate quarantine list | purge <entry-id>
 hibernate paths
 ```
 
@@ -138,9 +156,17 @@ and quarantine, stored under the platform data directory
 (`%APPDATA%\ProjectHibernate`, `~/Library/Application Support/ProjectHibernate`,
 `~/.local/share/ProjectHibernate`). Set `PROJECT_HIBERNATE_DATA_DIR` to relocate it.
 
+## Releasing
+
+Tag a version (`git tag v0.2.0 && git push origin v0.2.0`) and the release
+workflow builds Windows, macOS and Linux installers into a draft GitHub
+release. Signing and notarization are optional and driven by repository
+secrets; see [docs/RELEASING.md](docs/RELEASING.md).
+
 ## Status
 
-This is the v0.1 MVP from the [specification](developer-project-cleanup-spec.md):
+This is the v0.1 MVP from the [specification](developer-project-cleanup-spec.md)
+plus most of the v0.2/v0.3 roadmap (see [CHANGELOG.md](CHANGELOG.md)):
 scanning, stack detection, reclaimable sizes, search and filters, bulk
 selection, protection, per-artifact explanations, review-then-hibernate with
 progress and results, history with quarantine restore, wake, and a

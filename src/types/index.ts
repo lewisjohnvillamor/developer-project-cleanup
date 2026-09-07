@@ -13,7 +13,13 @@ export type Stack =
   | "cocoapods"
   | "dart"
   | "ruby"
-  | "php";
+  | "php"
+  | "swift"
+  | "elixir"
+  | "haskell"
+  | "zig"
+  | "unity"
+  | "terraform";
 
 export const STACK_LABELS: Record<Stack, string> = {
   node: "Node",
@@ -27,6 +33,12 @@ export const STACK_LABELS: Record<Stack, string> = {
   dart: "Dart",
   ruby: "Ruby",
   php: "PHP",
+  swift: "Swift",
+  elixir: "Elixir",
+  haskell: "Haskell",
+  zig: "Zig",
+  unity: "Unity",
+  terraform: "Terraform",
 };
 
 export type Safety = "safe" | "review" | "protected";
@@ -107,6 +119,9 @@ export interface Project {
   parentPath: string | null;
   stacks: Stack[];
   frameworks: string[];
+  workspaceMembers: string[];
+  scanDurationMs: number;
+  cacheHits: number;
   packageManager: string | null;
   totalBytes: number;
   reclaimableBytes: number;
@@ -143,6 +158,7 @@ export interface ScanSummary {
   durationMs: number;
   warningCount: number;
   finishedAt: string;
+  cacheHits: number;
 }
 
 export type ScanEvent =
@@ -189,6 +205,9 @@ export interface Settings {
   ignoredPaths: string[];
   customRules: CleanupRule[];
   protectedPatterns: string[];
+  incrementalScans: boolean;
+  scheduledScanHours: number;
+  notifyThresholdBytes: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -206,6 +225,9 @@ export const DEFAULT_SETTINGS: Settings = {
   ignoredPaths: [],
   customRules: [],
   protectedPatterns: [],
+  incrementalScans: true,
+  scheduledScanHours: 0,
+  notifyThresholdBytes: 1_000_000_000,
 };
 
 export interface SelectedProject {
@@ -308,10 +330,10 @@ export interface HistoryEntry {
   restoredAt: string | null;
 }
 
-export function entryRestorable(e: HistoryEntry): boolean {
+export function entryRestorable(e: HistoryEntry, trashRestoreSupported = false): boolean {
   return (
     e.restoredAt === null &&
-    e.projects.some((p) => p.artifacts.some((a) => a.outcome.kind === "quarantined"))
+    e.projects.some((p) => p.artifacts.some((a) => a.outcome.kind === "quarantined" || (trashRestoreSupported && a.outcome.kind === "trashed")))
   );
 }
 
@@ -354,6 +376,7 @@ export interface WakePlan {
   packageManager: string | null;
   steps: WakeStep[];
   notes: string[];
+  missingTools: string[];
 }
 
 export type WakeEvent =
@@ -370,6 +393,7 @@ export interface AppInfo {
   quarantineBytes: number;
   gitAvailable: boolean;
   trashAvailable: boolean;
+  trashRestoreSupported: boolean;
   homeDir: string | null;
 }
 
@@ -383,4 +407,51 @@ export interface RestoreResult {
   restored: number;
   errors: string[];
   entry: HistoryEntry;
+}
+
+export interface GlobalCache {
+  id: string;
+  label: string;
+  path: string;
+  exists: boolean;
+  bytes: number;
+  fileCount: number;
+  cleanCommand: string | null;
+  note: string;
+}
+
+export interface RuleMatch {
+  projectName: string;
+  projectPath: string;
+  path: string;
+  relativePath: string;
+  bytes: number;
+  fileCount: number;
+}
+
+export interface QuarantineBatch {
+  entryId: string;
+  date: string;
+  path: string;
+  bytes: number;
+  fileCount: number;
+  projects: string[];
+}
+
+export interface ScanRecord {
+  at: string;
+  projectCount: number;
+  totalBytes: number;
+  reclaimableBytes: number;
+  reviewBytes: number;
+}
+
+export interface ScanTrend {
+  records: ScanRecord[];
+}
+
+export type ExportFormat = "csv" | "json";
+
+export interface CacheInfo {
+  entries: number;
 }

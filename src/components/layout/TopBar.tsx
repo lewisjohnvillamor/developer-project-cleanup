@@ -1,6 +1,6 @@
-import { FolderPlus, Loader2, Search, X } from "lucide-react";
+import { ChevronDown, Command, Download, FolderPlus, Loader2, RefreshCw, Search, X } from "lucide-react";
 import { Button } from "@/components/common/Button";
-import { ProgressBar } from "@/components/common/Controls";
+import { Kbd, Menu, ProgressBar } from "@/components/common/Controls";
 import { useAppStore } from "@/stores/app-store";
 import { formatRelative } from "@/utils/format";
 
@@ -19,8 +19,12 @@ export function TopBar() {
   const roots = useAppStore((s) => s.settings.scanRoots);
   const scannedAt = useAppStore((s) => s.scannedAt);
   const setAddFoldersOpen = useAppStore((s) => s.setAddFoldersOpen);
+  const setPaletteOpen = useAppStore((s) => s.setPaletteOpen);
+  const exportProjects = useAppStore((s) => s.exportProjects);
   const hibernating = useAppStore((s) => s.hibernate.stage === "running");
+  const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
 
+  const summaryCacheHits = useAppStore((s) => s.summary?.cacheHits ?? 0);
   const progress = scan.discovered > 0 ? scan.scanned / scan.discovered : null;
 
   return (
@@ -37,10 +41,17 @@ export function TopBar() {
             {scan.currentName && <span className="max-w-48 truncate font-mono text-[11px] text-fg-subtle">{scan.currentName}</span>}
           </div>
         ) : scannedAt ? (
-          <span className="text-[12px] text-fg-subtle">Last scan {formatRelative(scannedAt).toLowerCase()}{roots.length ? ` · ${roots.length} folder${roots.length === 1 ? "" : "s"}` : ""}</span>
+          <span className="text-[12px] text-fg-subtle">
+            Last scan {formatRelative(scannedAt).toLowerCase()}
+            {roots.length ? ` · ${roots.length} folder${roots.length === 1 ? "" : "s"}` : ""}
+            {summaryCacheHits > 0 ? ` · ${summaryCacheHits} size${summaryCacheHits === 1 ? "" : "s"} reused` : ""}
+          </span>
         ) : null}
       </div>
       <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" icon={<Command size={14} />} onClick={() => setPaletteOpen(true)} title="Command palette">
+          <span className="hidden lg:inline">Commands</span> <Kbd>{isMac ? "⌘" : "Ctrl"} K</Kbd>
+        </Button>
         <Button variant="ghost" size="sm" icon={<FolderPlus size={14} />} onClick={() => setAddFoldersOpen(true)}>
           Folders
         </Button>
@@ -49,9 +60,33 @@ export function TopBar() {
             Cancel scan
           </Button>
         ) : (
-          <Button variant="primary" size="sm" icon={<Search size={14} />} onClick={() => startScan()} disabled={hibernating} title={hibernating ? "Wait for the cleanup to finish" : undefined}>
-            Scan Projects
-          </Button>
+          <div className="flex items-stretch">
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Search size={14} />}
+              onClick={() => startScan()}
+              disabled={hibernating}
+              title={hibernating ? "Wait for the cleanup to finish" : "Scan (reuses cached sizes for unchanged folders)"}
+              className="rounded-r-none"
+            >
+              Scan Projects
+            </Button>
+            <Menu
+              align="right"
+              trigger={() => (
+                <Button variant="primary" size="sm" disabled={hibernating} className="rounded-l-none border-l border-l-white/20 px-1.5" title="More scan options">
+                  <ChevronDown size={13} />
+                </Button>
+              )}
+              items={[
+                { label: "Full rescan", icon: <RefreshCw size={13} />, hint: "ignore cached sizes", onSelect: () => startScan(undefined, true) },
+                { separator: true, label: "" },
+                { label: "Export as CSV", icon: <Download size={13} />, onSelect: () => exportProjects("csv") },
+                { label: "Export as JSON", icon: <Download size={13} />, onSelect: () => exportProjects("json") },
+              ]}
+            />
+          </div>
         )}
       </div>
     </header>

@@ -15,6 +15,8 @@ import {
   type HistoryProject,
   type PlannedProject,
   type Project,
+  type QuarantineBatch,
+  type ScanRecord,
   type ScanEvent,
   type ScanSnapshot,
   type ScanSummary,
@@ -166,6 +168,9 @@ function makeProjects(root: string, now: number): Project[] {
       parentPath: null,
       stacks: [stack],
       frameworks,
+      workspaceMembers: name === "purple-rally" ? ["apps/web", "apps/api", "packages/ui"] : [],
+      scanDurationMs: Math.round(r() * 3000),
+      cacheHits: 0,
       packageManager: pm,
       totalBytes: size + 30_000_000 + Math.round(r() * 200_000_000),
       reclaimableBytes: reclaimable,
@@ -217,6 +222,7 @@ function summarise(roots: string[], projects: Project[], durationMs: number): Sc
     durationMs,
     warningCount: 0,
     finishedAt: new Date().toISOString(),
+    cacheHits: 0,
   };
 }
 
@@ -233,6 +239,7 @@ export function createMockBackend(): Backend {
   let summary: ScanSummary | null = null;
   let scannedAt: string | null = null;
   let history: HistoryEntry[] = [];
+  let trend: ScanRecord[] = [];
   let cancelScan = false;
   let cancelHib = false;
   let cancelWake = false;
@@ -240,7 +247,8 @@ export function createMockBackend(): Backend {
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (raw) {
-      const saved = JSON.parse(raw) as { settings?: Settings; projects?: Project[]; summary?: ScanSummary; scannedAt?: string; history?: HistoryEntry[] };
+      const saved = JSON.parse(raw) as { settings?: Settings; projects?: Project[]; summary?: ScanSummary; scannedAt?: string; history?: HistoryEntry[]; trend?: ScanRecord[] };
+      trend = saved.trend ?? [];
       settings = { ...DEFAULT_SETTINGS, ...(saved.settings ?? {}) };
       projects = saved.projects ?? [];
       summary = saved.summary ?? null;
@@ -252,7 +260,7 @@ export function createMockBackend(): Backend {
   }
   const persist = () => {
     try {
-      localStorage.setItem(LS_KEY, JSON.stringify({ settings, projects, summary, scannedAt, history }));
+      localStorage.setItem(LS_KEY, JSON.stringify({ settings, projects, summary, scannedAt, history, trend }));
     } catch {
       /* ignore */
     }
@@ -322,13 +330,13 @@ export function createMockBackend(): Backend {
       else if (s === "maven") steps.push({ program: "mvn", args: ["-q", "package", "-DskipTests"], display: "mvn -q package -DskipTests" });
     }
     if (!steps.length) return null;
-    return { projectId: p.id, cwd: p.path, packageManager: p.packageManager, steps, notes: ["Commands run inside the project folder and nothing else."] };
+    return { projectId: p.id, cwd: p.path, packageManager: p.packageManager, steps, notes: ["Commands run inside the project folder and nothing else."], missingTools: p.stacks.includes("dart") ? ["flutter"] : [] };
   };
 
   return {
     kind: "mock",
     async getAppInfo() {
-      return { version: "0.1.0 (browser preview)", platform: "browser", dataDir: "~/.local/share/ProjectHibernate", quarantineDir: "~/.local/share/ProjectHibernate/quarantine", quarantineBytes: 0, gitAvailable: true, trashAvailable: true, homeDir: "/home/dev" };
+      return { version: "0.1.0 (browser preview)", platform: "browser", dataDir: "~/.local/share/ProjectHibernate", quarantineDir: "~/.local/share/ProjectHibernate/quarantine", quarantineBytes: 0, gitAvailable: true, trashAvailable: true, trashRestoreSupported: true, homeDir: "/home/dev" };
     },
     async getSettings() {
       return settings;
@@ -349,8 +357,9 @@ export function createMockBackend(): Backend {
     async getLastScan(): Promise<ScanSnapshot> {
       return { projects, summary, scannedAt };
     },
-    async startScan(roots) {
+    async startScan(roots, full = false) {
       cancelScan = false;
+      const reuse = !full && projects.length > 0;
       const started = performance.now();
       const root = roots[0] ?? "/home/dev/Projects";
       const now = Date.now();
@@ -390,7 +399,16 @@ export function createMockBackend(): Backend {
         }
         projects.sort((a, b) => b.reclaimableBytes - a.reclaimableBytes || a.name.localeCompare(b.name));
         summary = summarise(roots, projects, performance.now() - started);
+        if (reuse) summary.cacheHits = Math.round(projects.length * 0.8);
         scannedAt = new Date().toISOString();
+        trend = trend.filter((t) => t.at.slice(0, 10) !== scannedAt!.slice(0, 10));
+        if (trend.length === 0) {
+          // Seed a little history so the trend chart has something to show.
+          for (let d = 6; d >= 1; d--) {
+            trend.push({ at: new Date(Date.now() - d * 86_400_000).toISOString(), projectCount: projects.length, totalBytes: summary.totalBytes * (1 + d * 0.02), reclaimableBytes: summary.reclaimableBytes * (1 + d * 0.05), reviewBytes: summary.reviewBytes });
+          }
+        }
+        trend.push({ at: scannedAt, projectCount: projects.length, totalBytes: summary.totalBytes, reclaimableBytes: summary.reclaimableBytes, reviewBytes: summary.reviewBytes });
         persist();
         if (cancelScan) scanEvents.emit({ type: "cancelled", scanned: projects.length, discovered: fresh.length });
         else scanEvents.emit({ type: "finished", summary });
@@ -400,6 +418,13 @@ export function createMockBackend(): Backend {
       cancelScan = true;
     },
     onScanEvent: async (h) => scanEvents.on(h),
+    async getScanTrend() {
+      return { records: trend };
+    },
+    async getCacheInfo() {
+      return { entries: projects.length * 2 };
+    },
+    async clearTreeCache() {},
 
     async setProtected(id, flag) {
       const p = find(id);
@@ -563,6 +588,49 @@ export function createMockBackend(): Backend {
       } catch {
         /* ignore */
       }
+    },
+    async getGlobalCaches() {
+      await sleep(600);
+      return [
+        { id: "cargo-registry", label: "Cargo registry", path: "~/.cargo/registry", exists: true, bytes: 6_400_000_000, fileCount: 412_000, cleanCommand: "cargo cache --autoclean", note: "Downloaded crate sources. Re-fetched on demand." },
+        { id: "pnpm-store", label: "pnpm store", path: "~/.local/share/pnpm/store", exists: true, bytes: 4_100_000_000, fileCount: 980_000, cleanCommand: "pnpm store prune", note: "Hard-linked package store. Pruning removes packages no project references." },
+        { id: "npm-cache", label: "npm cache", path: "~/.npm/_cacache", exists: true, bytes: 2_300_000_000, fileCount: 120_000, cleanCommand: "npm cache clean --force", note: "Content-addressed tarball cache shared by every Node project." },
+        { id: "pip-cache", label: "pip cache", path: "~/.cache/pip", exists: true, bytes: 900_000_000, fileCount: 8_000, cleanCommand: "pip cache purge", note: "Wheels and HTTP responses cached by pip." },
+        { id: "go-mod", label: "Go module cache", path: "~/go/pkg/mod", exists: false, bytes: 0, fileCount: 0, cleanCommand: "go clean -modcache", note: "Downloaded Go modules." },
+      ];
+    },
+    async previewRule(pattern, ecosystems) {
+      await sleep(300);
+      if (!pattern.trim()) return [];
+      return projects
+        .filter((p) => !ecosystems.length || p.stacks.some((s) => ecosystems.includes(s)))
+        .slice(0, 6)
+        .map((p, i) => ({ projectName: p.name, projectPath: p.path, path: `${p.path}/${pattern}`, relativePath: `${pattern}/`, bytes: Math.round((i + 1) * 37_000_000), fileCount: (i + 1) * 120 }));
+    },
+    async exportProjects(format) {
+      const blob = new Blob([format === "csv" ? "name,path\n" + projects.map((p) => `${p.name},${p.path}`).join("\n") : JSON.stringify(projects, null, 2)], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `projects.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      return `~/Downloads/projects.${format}`;
+    },
+    async listQuarantine(): Promise<QuarantineBatch[]> {
+      return history
+        .filter((e) => e.disposition === "quarantine" && e.restoredAt === null)
+        .map((e) => ({ entryId: e.id, date: e.finishedAt.slice(0, 10), path: `~/.local/share/ProjectHibernate/quarantine/${e.finishedAt.slice(0, 10)}/${e.id}`, bytes: e.totalRecovered, fileCount: 1000, projects: e.projects.map((p) => p.name) }));
+    },
+    async purgeQuarantineBatch(entryId) {
+      const e = history.find((x) => x.id === entryId);
+      if (!e) throw new Error("no such quarantine batch");
+      for (const p of e.projects) for (const a of p.artifacts) if (a.outcome.kind === "quarantined") a.outcome = { kind: "deleted" };
+      persist();
+      return e.totalRecovered;
+    },
+    async getDiagnostics() {
+      return `Project Hibernate 0.1.0 (browser preview)\nOS: browser\nprojects: ${projects.length}\nhistory entries: ${history.length}`;
     },
   };
 }

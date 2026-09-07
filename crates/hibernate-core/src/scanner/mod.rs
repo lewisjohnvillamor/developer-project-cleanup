@@ -8,6 +8,7 @@
 //!    Each finished project is emitted as soon as it is ready.
 
 pub mod activity;
+pub mod cache;
 pub mod size;
 pub mod traversal;
 
@@ -22,9 +23,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+pub use cache::{SharedTreeCache, TreeCache};
 pub use traversal::DiscoveredProject;
+
+/// Measuring a single project longer than this produces a warning.
+pub const SLOW_PROJECT_SECS: u64 = 20;
 
 #[derive(Debug, Clone)]
 pub struct ScanOptions {
@@ -36,6 +42,8 @@ pub struct ScanOptions {
     pub dormant_after_days: u32,
     pub inspect_git: bool,
     pub rules: RuleSet,
+    /// Fingerprint cache from the previous scan. `None` = full rescan.
+    pub tree_cache: Option<Arc<Mutex<TreeCache>>>,
 }
 
 impl Default for ScanOptions {
@@ -48,6 +56,7 @@ impl Default for ScanOptions {
             dormant_after_days: 14,
             inspect_git: true,
             rules: RuleSet::builtin(),
+            tree_cache: None,
         }
     }
 }
@@ -72,6 +81,9 @@ pub struct ScanSummary {
     pub duration_ms: u128,
     pub warning_count: usize,
     pub finished_at: DateTime<Utc>,
+    /// Artifact trees whose size was reused from the previous scan.
+    #[serde(default)]
+    pub cache_hits: usize,
 }
 
 impl ScanSummary {
@@ -114,6 +126,7 @@ impl ScanSummary {
             duration_ms,
             warning_count,
             finished_at: Utc::now(),
+            cache_hits: projects.iter().map(|p| p.cache_hits as usize).sum(),
         }
     }
 }
@@ -312,6 +325,13 @@ pub fn scan(
     };
 
     let mut projects: Vec<Project> = results.into_iter().flatten().collect();
+    if !cancel.load(Ordering::Relaxed) {
+        if let Some(cache) = &opts.tree_cache {
+            if let Ok(mut c) = cache.lock() {
+                c.prune_untouched();
+            }
+        }
+    }
     projects.sort_by(|a, b| {
         b.reclaimable_bytes
             .cmp(&a.reclaimable_bytes)
@@ -366,6 +386,7 @@ fn build_project(
         }
         rule.restore_hint.clone()
     };
+    let started = Instant::now();
     let m = size::measure(
         &d.path,
         &det.stacks,
@@ -375,9 +396,18 @@ fn build_project(
             rules: &opts.rules,
             project_paths,
             ignored_paths: &opts.ignored_paths,
+            cache: opts.tree_cache.as_deref(),
         },
         cancel,
     );
+    let scan_duration_ms = started.elapsed().as_millis() as u64;
+    let mut warnings = m.warnings;
+    if scan_duration_ms > SLOW_PROJECT_SECS * 1000 {
+        warnings.push(format!(
+            "Measuring took {:.0}s. Consider excluding this folder or its largest sub-folders if it is not a project you care about.",
+            scan_duration_ms as f64 / 1000.0
+        ));
+    }
 
     let git_info = git::inspect(&d.path, git_ok);
     let activity = ActivitySources {
@@ -427,6 +457,9 @@ fn build_project(
         parent_path: d.parent.clone(),
         stacks: det.stacks.clone(),
         frameworks: det.frameworks.clone(),
+        workspace_members: d.members.clone(),
+        scan_duration_ms,
+        cache_hits: m.cache_hits,
         package_manager: pm,
         total_bytes: m.total_bytes,
         reclaimable_bytes,
@@ -444,7 +477,7 @@ fn build_project(
         ignored_until,
         hibernation,
         scanned_at: now,
-        warnings: m.warnings,
+        warnings,
     };
     let (safety, reasons) = activity::safety(&project);
     project.safety = safety;

@@ -2,7 +2,9 @@
 
 use crate::cleanup::rules::{CleanupRule, RuleSet};
 use crate::model::{CleanupArtifact, Stack};
+use crate::scanner::cache::{fingerprint, SharedTreeCache};
 use crate::scanner::traversal::{is_default_ignored, is_user_ignored, MAX_DEPTH};
+use chrono::Utc;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -18,6 +20,8 @@ pub struct Measurement {
     pub artifacts: Vec<CleanupArtifact>,
     pub protected_entries: Vec<String>,
     pub warnings: Vec<String>,
+    /// Artifact / ignored trees whose size came from the cache.
+    pub cache_hits: u32,
 }
 
 pub struct MeasureOptions<'a> {
@@ -27,6 +31,9 @@ pub struct MeasureOptions<'a> {
     /// their bytes are only counted once.
     pub project_paths: &'a HashSet<PathBuf>,
     pub ignored_paths: &'a [PathBuf],
+    /// Fingerprint cache for whole-tree measurements. `None` forces a full
+    /// walk of every tree.
+    pub cache: Option<&'a SharedTreeCache>,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -128,15 +135,17 @@ pub fn measure(
                 }
                 if !frame.generated {
                     if is_default_ignored(&name) {
-                        stack.push(Frame {
-                            path: child,
-                            generated: true,
-                            depth: frame.depth + 1,
-                        });
+                        // `.git/` and friends: counted as a whole tree so the
+                        // cache can skip large object stores.
+                        let (tree, hit) = measure_tree_cached(&child, opts.cache, cancel);
+                        m.total_bytes += tree.bytes;
+                        m.file_count += tree.files;
+                        m.cache_hits += hit as u32;
                         continue;
                     }
                     if let Some(rule) = opts.rules.match_for(&name, stacks) {
-                        let tree = measure_tree(&child, cancel);
+                        let (tree, hit) = measure_tree_cached(&child, opts.cache, cancel);
+                        m.cache_hits += hit as u32;
                         m.total_bytes += tree.bytes;
                         m.file_count += tree.files;
                         m.artifacts.push(CleanupArtifact {
@@ -182,6 +191,34 @@ pub fn measure(
     m.protected_entries.truncate(16);
     m.artifacts.sort_by(|a, b| b.bytes.cmp(&a.bytes));
     m
+}
+
+/// Measure a tree, reusing the cached size when its fingerprint matches.
+/// Returns the size and whether it was a cache hit.
+pub fn measure_tree_cached(
+    root: &Path,
+    cache: Option<&SharedTreeCache>,
+    cancel: &AtomicBool,
+) -> (TreeSize, bool) {
+    let Some(cache) = cache else {
+        return (measure_tree(root, cancel), false);
+    };
+    let now = Utc::now();
+    let fp = fingerprint(root);
+    if let Some(fp) = fp {
+        if let Ok(mut c) = cache.lock() {
+            if let Some(size) = c.get(root, fp, now) {
+                return (size, true);
+            }
+        }
+    }
+    let size = measure_tree(root, cancel);
+    if let (Some(fp), false) = (fp, cancel.load(Ordering::Relaxed)) {
+        if let Ok(mut c) = cache.lock() {
+            c.insert(root, fp, size, now);
+        }
+    }
+    (size, false)
 }
 
 /// Size of a whole directory tree. Symlinks count as their own size and are
@@ -265,6 +302,7 @@ mod tests {
             rules: &rules,
             project_paths: &paths,
             ignored_paths: &[],
+            cache: None,
         };
         let m = measure(
             &p,
@@ -315,6 +353,7 @@ mod tests {
             rules: &rules,
             project_paths: &paths,
             ignored_paths: &[],
+            cache: None,
         };
         let m = measure(
             &p,
@@ -326,6 +365,58 @@ mod tests {
         assert_eq!(m.total_bytes, 910);
         assert_eq!(m.artifacts.len(), 1);
         assert_eq!(m.artifacts[0].kind, "rust-target");
+    }
+
+    #[test]
+    fn cached_trees_are_reused_until_they_change() {
+        let tmp = tempdir().unwrap();
+        let p = tmp.path().join("web");
+        write(&p.join("package.json"), 10);
+        for i in 0..250 {
+            write(
+                &p.join(format!("node_modules/pkg{}/index.js", i % 25))
+                    .with_file_name(format!("f{i}.js")),
+                100,
+            );
+        }
+        let rules = RuleSet::builtin();
+        let paths = HashSet::new();
+        let cache = std::sync::Mutex::new(crate::scanner::cache::TreeCache::default());
+        let opts = MeasureOptions {
+            follow_symlinks: false,
+            rules: &rules,
+            project_paths: &paths,
+            ignored_paths: &[],
+            cache: Some(&cache),
+        };
+        let first = measure(
+            &p,
+            &[Stack::Node],
+            &|_| None,
+            &opts,
+            &AtomicBool::new(false),
+        );
+        assert_eq!(first.cache_hits, 0);
+        let second = measure(
+            &p,
+            &[Stack::Node],
+            &|_| None,
+            &opts,
+            &AtomicBool::new(false),
+        );
+        assert_eq!(second.cache_hits, 1);
+        assert_eq!(second.artifacts[0].bytes, first.artifacts[0].bytes);
+        // Change deep inside a package: the fingerprint moves, so it is re-measured.
+        write(&p.join("node_modules/pkg3/new.js"), 5000);
+        let third = measure(
+            &p,
+            &[Stack::Node],
+            &|_| None,
+            &opts,
+            &AtomicBool::new(false),
+        );
+        assert_eq!(third.cache_hits, 0);
+        assert_eq!(third.artifacts[0].bytes, first.artifacts[0].bytes + 5000);
     }
 
     #[test]
@@ -347,6 +438,7 @@ mod tests {
             rules: &rules,
             project_paths: &paths,
             ignored_paths: &[],
+            cache: None,
         };
         let m = measure(
             &p,

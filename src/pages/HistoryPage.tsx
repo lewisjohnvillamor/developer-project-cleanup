@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { AlertTriangle, ArchiveRestore, ChevronDown, ChevronRight, FolderOpen, History, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertTriangle, ArchiveRestore, ChevronDown, ChevronRight, FolderOpen, History, ShieldAlert, Trash2 } from "lucide-react";
 import { Button } from "@/components/common/Button";
 import { Badge } from "@/components/common/Badge";
 import { EmptyState } from "@/components/common/Controls";
@@ -16,7 +16,8 @@ function Entry({ entry }: { entry: HistoryEntry }) {
   const openFolder = useAppStore((s) => s.openFolder);
   const projects = useAppStore((s) => s.projects);
   const [restoring, setRestoring] = useState(false);
-  const restorable = entryRestorable(entry);
+  const trashRestore = useAppStore((s) => s.info?.trashRestoreSupported ?? false);
+  const restorable = entryRestorable(entry, trashRestore);
   const toggle = (id: string) => {
     const n = new Set(details);
     if (n.has(id)) n.delete(id);
@@ -45,7 +46,7 @@ function Entry({ entry }: { entry: HistoryEntry }) {
           </div>
           <div className="text-[11.5px] text-fg-subtle">
             {formatDateTime(entry.finishedAt)} · {DISPOSITION_LABEL[entry.disposition]}
-            {restorable ? " · restorable from quarantine" : ""}
+            {restorable ? (entry.disposition === "trash" ? " · restorable from the Trash" : " · restorable from quarantine") : ""}
           </div>
         </div>
         {restorable && (
@@ -60,7 +61,7 @@ function Entry({ entry }: { entry: HistoryEntry }) {
               setRestoring(false);
             }}
           >
-            Restore from quarantine
+            {entry.disposition === "trash" ? "Restore from Trash" : "Restore from quarantine"}
           </Button>
         )}
       </div>
@@ -108,6 +109,56 @@ function Entry({ entry }: { entry: HistoryEntry }) {
   );
 }
 
+function QuarantinePanel() {
+  const quarantine = useAppStore((s) => s.quarantine);
+  const load = useAppStore((s) => s.loadQuarantine);
+  const purge = useAppStore((s) => s.purgeQuarantine);
+  const retention = useAppStore((s) => s.settings.quarantineRetentionDays);
+  const [confirm, setConfirm] = useState<string | null>(null);
+  useEffect(() => {
+    load();
+  }, [load]);
+  if (!quarantine.length) return null;
+  const total = quarantine.reduce((s, b) => s + b.bytes, 0);
+  return (
+    <section>
+      <h3 className="mb-2 flex items-center justify-between text-[12px] font-semibold uppercase tracking-wide text-fg-muted">
+        <span>Quarantine · {formatBytes(total)}</span>
+        <span className="font-normal normal-case tracking-normal text-fg-subtle">Batches expire after {retention} day{retention === 1 ? "" : "s"}</span>
+      </h3>
+      <ul className="divide-y divide-border rounded-lg border border-border bg-surface">
+        {quarantine.map((b) => (
+          <li key={b.entryId} className="flex items-center gap-3 px-4 py-2.5 text-[12.5px]">
+            <div className="min-w-0 flex-1">
+              <div className="text-fg">
+                {b.projects.length ? b.projects.join(", ") : "(empty)"}
+              </div>
+              <div className="truncate font-mono text-[11px] text-fg-subtle" title={b.path}>
+                {b.date} · {b.entryId}
+              </div>
+            </div>
+            <span className="tabular text-fg">{formatBytes(b.bytes)}</span>
+            {confirm === b.entryId ? (
+              <>
+                <Button size="sm" variant="ghost" onClick={() => setConfirm(null)}>
+                  Keep
+                </Button>
+                <Button size="sm" variant="danger" icon={<ShieldAlert size={12} />} onClick={() => { setConfirm(null); purge(b.entryId); }}>
+                  Delete permanently
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" variant="ghost" icon={<Trash2 size={12} />} onClick={() => setConfirm(b.entryId)}>
+                Purge
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export function HistoryPage() {
   const history = useAppStore((s) => s.history);
   const info = useAppStore((s) => s.info);
@@ -136,6 +187,7 @@ export function HistoryPage() {
             </span>
           )}
         </div>
+        <QuarantinePanel />
         {[...groups.entries()].map(([day, entries]) => (
           <section key={day}>
             <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-fg-muted">{day}</h3>

@@ -1,17 +1,22 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import type { Backend } from "./backend";
 import type {
   AppInfo,
+  CacheInfo,
   FolderInfo,
+  GlobalCache,
   HibernateEvent,
   HibernatePlan,
   HistoryStore,
   Project,
+  QuarantineBatch,
   RestoreResult,
+  RuleMatch,
   ScanEvent,
   ScanSnapshot,
+  ScanTrend,
   Settings,
   WakeEvent,
   WakePlan,
@@ -34,9 +39,12 @@ export const tauriBackend: Backend = {
   validateFolder: (path) => invoke<FolderInfo>("validate_folder", { path }),
 
   getLastScan: () => invoke<ScanSnapshot>("get_last_scan"),
-  startScan: (roots) => invoke("start_scan", { roots }),
+  startScan: (roots, full = false) => invoke("start_scan", { roots, full }),
   cancelScan: () => invoke("cancel_scan"),
   onScanEvent: (h) => on<ScanEvent>("scan-event", h),
+  getScanTrend: () => invoke<ScanTrend>("get_scan_trend"),
+  getCacheInfo: () => invoke<CacheInfo>("get_cache_info"),
+  clearTreeCache: () => invoke("clear_tree_cache"),
 
   setProtected: (projectId, protected_) => invoke<Project>("set_protected", { projectId, protected: protected_ }),
   ignoreProject: (projectId, days) => invoke<Project>("ignore_project", { projectId, days }),
@@ -58,4 +66,20 @@ export const tauriBackend: Backend = {
 
   openProjectFolder: (projectId) => invoke("open_project_folder", { projectId }),
   copyText: (text) => invoke("copy_text", { text }),
+
+  getGlobalCaches: () => invoke<GlobalCache[]>("get_global_caches"),
+  previewRule: (pattern, ecosystems) => invoke<RuleMatch[]>("preview_rule", { pattern, ecosystems }),
+  async exportProjects(format) {
+    const path = await save({
+      title: "Export projects",
+      defaultPath: `projects.${format}`,
+      filters: [{ name: format.toUpperCase(), extensions: [format] }],
+    });
+    if (!path) return null;
+    await invoke("export_projects", { path, format });
+    return path;
+  },
+  listQuarantine: () => invoke<QuarantineBatch[]>("list_quarantine"),
+  purgeQuarantineBatch: (entryId) => invoke<number>("purge_quarantine_batch", { entryId }),
+  getDiagnostics: () => invoke<string>("get_diagnostics"),
 };

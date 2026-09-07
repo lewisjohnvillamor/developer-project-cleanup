@@ -4,16 +4,23 @@
 
 import type {
   AppInfo,
+  CacheInfo,
+  ExportFormat,
   FolderInfo,
+  GlobalCache,
   HibernateEvent,
   HibernatePlan,
   HibernateRequest,
   HistoryStore,
   Project,
+  QuarantineBatch,
   RestoreResult,
+  RuleMatch,
   ScanEvent,
   ScanSnapshot,
+  ScanTrend,
   Settings,
+  Stack,
   WakeEvent,
   WakePlan,
 } from "@/types";
@@ -29,9 +36,12 @@ export interface Backend {
   validateFolder(path: string): Promise<FolderInfo>;
 
   getLastScan(): Promise<ScanSnapshot>;
-  startScan(roots: string[]): Promise<void>;
+  startScan(roots: string[], full?: boolean): Promise<void>;
   cancelScan(): Promise<void>;
   onScanEvent(handler: (e: ScanEvent) => void): Promise<Unlisten>;
+  getScanTrend(): Promise<ScanTrend>;
+  getCacheInfo(): Promise<CacheInfo>;
+  clearTreeCache(): Promise<void>;
 
   setProtected(projectId: string, protected_: boolean): Promise<Project>;
   ignoreProject(projectId: string, days: number | null): Promise<Project>;
@@ -53,6 +63,14 @@ export interface Backend {
 
   openProjectFolder(projectId: string): Promise<void>;
   copyText(text: string): Promise<void>;
+
+  getGlobalCaches(): Promise<GlobalCache[]>;
+  previewRule(pattern: string, ecosystems: Stack[]): Promise<RuleMatch[]>;
+  /** Ask for a destination and write the export. Resolves to the path, or null when cancelled. */
+  exportProjects(format: ExportFormat): Promise<string | null>;
+  listQuarantine(): Promise<QuarantineBatch[]>;
+  purgeQuarantineBatch(entryId: string): Promise<number>;
+  getDiagnostics(): Promise<string>;
 }
 
 export function isTauri(): boolean {

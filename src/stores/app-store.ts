@@ -3,12 +3,16 @@ import { getBackend, type Backend } from "@/lib";
 import type {
   AppInfo,
   ArtifactOutcome,
+  ExportFormat,
+  GlobalCache,
   HibernateEvent,
   HibernatePlan,
   HibernateRequest,
   HistoryEntry,
   Project,
+  QuarantineBatch,
   ScanEvent,
+  ScanRecord,
   ScanSummary,
   Settings,
   WakeEvent,
@@ -118,6 +122,12 @@ interface AppStore {
   history: HistoryEntry[];
   toasts: Toast[];
   addFoldersOpen: boolean;
+  quarantine: QuarantineBatch[];
+  caches: GlobalCache[] | null;
+  cachesLoading: boolean;
+  trend: ScanRecord[];
+  cacheEntries: number;
+  paletteOpen: boolean;
 
   init(): Promise<void>;
   setPage(page: Page): void;
@@ -126,8 +136,10 @@ interface AppStore {
   removeScanRoot(path: string): Promise<void>;
   setAddFoldersOpen(open: boolean): void;
 
-  startScan(roots?: string[]): Promise<void>;
+  startScan(roots?: string[], full?: boolean): Promise<void>;
   cancelScan(): Promise<void>;
+  loadTrend(): Promise<void>;
+  clearCache(): Promise<void>;
 
   toggleSelect(id: string): void;
   selectMany(ids: string[]): void;
@@ -147,6 +159,7 @@ interface AppStore {
 
   reviewHibernate(ids: string[], artifactPaths?: Record<string, string[]>): Promise<void>;
   setIncludeReview(include: boolean): Promise<void>;
+  toggleReviewArtifact(projectId: string, artifactPath: string): Promise<void>;
   confirmHibernate(): Promise<void>;
   cancelHibernate(): Promise<void>;
   closeHibernate(): void;
@@ -158,6 +171,14 @@ interface AppStore {
   runWake(): Promise<void>;
   cancelWake(): Promise<void>;
   closeWake(): void;
+
+  loadQuarantine(): Promise<void>;
+  purgeQuarantine(entryId: string): Promise<void>;
+  loadCaches(): Promise<void>;
+  exportProjects(format: ExportFormat): Promise<void>;
+  copyDiagnostics(): Promise<void>;
+  excludeFolder(path: string): Promise<void>;
+  setPaletteOpen(open: boolean): void;
 
   toast(message: string, kind?: Toast["kind"]): void;
   dismissToast(id: number): void;
@@ -202,14 +223,22 @@ export const useAppStore = create<AppStore>((set, get) => ({
   history: [],
   toasts: [],
   addFoldersOpen: false,
+  quarantine: [],
+  caches: null,
+  cachesLoading: false,
+  trend: [],
+  cacheEntries: 0,
+  paletteOpen: false,
 
   async init() {
     const backend = await getBackend();
-    const [info, settings, snapshot, history] = await Promise.all([
+    const [info, settings, snapshot, history, trend, cacheInfo] = await Promise.all([
       backend.getAppInfo(),
       backend.getSettings(),
       backend.getLastScan(),
       backend.getHistory(),
+      backend.getScanTrend().catch(() => ({ records: [] })),
+      backend.getCacheInfo().catch(() => ({ entries: 0 })),
     ]);
     set({
       backend,
@@ -219,7 +248,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
       summary: snapshot.summary,
       scannedAt: snapshot.scannedAt,
       history: history.entries,
-      page: settings.scanRoots.length || snapshot.projects.length ? "overview" : "overview",
+      trend: trend.records,
+      cacheEntries: cacheInfo.entries,
+      page: "overview",
       ready: true,
     });
 
@@ -257,6 +288,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
               scan: { ...get().scan, running: false, cancelled: e.type === "cancelled" },
             });
             if (e.type === "cancelled") get().toast("Scan cancelled. Showing partial results.", "info");
+            else if (snap.summary && snap.summary.cacheHits > 0) {
+              get().toast(`Scan finished. ${snap.summary.cacheHits} folder size${snap.summary.cacheHits === 1 ? "" : "s"} reused from the previous scan.`, "success");
+            }
+            get().loadTrend();
+            backend.getCacheInfo().then((c) => set({ cacheEntries: c.entries })).catch(() => {});
           });
           break;
         }
@@ -378,7 +414,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ addFoldersOpen: open });
   },
 
-  async startScan(roots) {
+  async startScan(roots, full = false) {
     const { backend, settings } = get();
     if (!backend) return;
     const targets = roots ?? settings.scanRoots;
@@ -387,7 +423,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       return;
     }
     try {
-      await backend.startScan(targets);
+      await backend.startScan(targets, full);
       set({ page: get().page === "settings" ? "projects" : get().page });
     } catch (err) {
       get().toast(String(err), "error");
@@ -396,6 +432,25 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   async cancelScan() {
     await get().backend?.cancelScan();
+  },
+
+  async loadTrend() {
+    const { backend } = get();
+    if (!backend) return;
+    try {
+      const t = await backend.getScanTrend();
+      set({ trend: t.records });
+    } catch {
+      /* optional */
+    }
+  },
+
+  async clearCache() {
+    const { backend } = get();
+    if (!backend) return;
+    await backend.clearTreeCache();
+    set({ cacheEntries: 0 });
+    get().toast("Cached folder sizes cleared. The next scan measures everything again.", "info");
   },
 
   toggleSelect(id) {
@@ -528,6 +583,25 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
+  async toggleReviewArtifact(projectId, artifactPath) {
+    const { backend, hibernate } = get();
+    if (!backend || !hibernate.request || !hibernate.plan) return;
+    const planned = hibernate.plan.projects.find((p) => p.id === projectId);
+    if (!planned) return;
+    const current = new Set(planned.artifacts.map((a) => a.path));
+    if (current.has(artifactPath)) current.delete(artifactPath);
+    else current.add(artifactPath);
+    const selection = hibernate.request.selection.map((s) => (s.projectId === projectId ? { ...s, artifactPaths: [...current] } : s));
+    const request = { ...hibernate.request, selection };
+    set({ hibernate: { ...hibernate, request, planLoading: true } });
+    try {
+      const plan = await backend.planHibernate(request);
+      set({ hibernate: { ...get().hibernate, plan, planLoading: false } });
+    } catch (err) {
+      set({ hibernate: { ...get().hibernate, planLoading: false, error: String(err) } });
+    }
+  },
+
   async confirmHibernate() {
     const { backend, hibernate } = get();
     if (!backend || !hibernate.request) return;
@@ -599,6 +673,85 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   closeWake() {
     set({ wake: IDLE_WAKE });
+  },
+
+  async loadQuarantine() {
+    const { backend } = get();
+    if (!backend) return;
+    try {
+      set({ quarantine: await backend.listQuarantine() });
+    } catch (err) {
+      get().toast(String(err), "error");
+    }
+  },
+
+  async purgeQuarantine(entryId) {
+    const { backend } = get();
+    if (!backend) return;
+    try {
+      const bytes = await backend.purgeQuarantineBatch(entryId);
+      get().toast(`Quarantine batch removed permanently. ${bytes ? `${Math.round(bytes / 1e6)} MB freed.` : ""}`, "success");
+      await Promise.all([get().loadQuarantine(), get().loadHistory()]);
+      const info = await backend.getAppInfo();
+      set({ info });
+    } catch (err) {
+      get().toast(String(err), "error");
+    }
+  },
+
+  async loadCaches() {
+    const { backend, cachesLoading } = get();
+    if (!backend || cachesLoading) return;
+    set({ cachesLoading: true });
+    try {
+      set({ caches: await backend.getGlobalCaches() });
+    } catch (err) {
+      get().toast(String(err), "error");
+    } finally {
+      set({ cachesLoading: false });
+    }
+  },
+
+  async exportProjects(format) {
+    const { backend, projects } = get();
+    if (!backend) return;
+    if (!projects.length) {
+      get().toast("Nothing to export yet. Run a scan first.", "info");
+      return;
+    }
+    try {
+      const path = await backend.exportProjects(format);
+      if (path) get().toast(`Exported ${projects.length} projects to ${path}`, "success");
+    } catch (err) {
+      get().toast(String(err), "error");
+    }
+  },
+
+  async copyDiagnostics() {
+    const { backend } = get();
+    if (!backend) return;
+    try {
+      const text = await backend.getDiagnostics();
+      await backend.copyText(text);
+      get().toast("Diagnostics copied. Paste them into a bug report.", "success");
+    } catch (err) {
+      get().toast(String(err), "error");
+    }
+  },
+
+  async excludeFolder(path) {
+    const { settings } = get();
+    if (settings.ignoredPaths.includes(path)) return;
+    await get().saveSettings({ ignoredPaths: [...settings.ignoredPaths, path] });
+    const sel = new Set(get().selection);
+    const p = get().projects.find((x) => x.path === path);
+    if (p) sel.delete(p.id);
+    set({ projects: get().projects.filter((x) => x.path !== path), selection: sel, drawerProjectId: null });
+    get().toast("Folder excluded from future scans. Manage exclusions in Settings.", "info");
+  },
+
+  setPaletteOpen(open) {
+    set({ paletteOpen: open });
   },
 
   toast(message, kind = "info") {

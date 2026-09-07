@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Archive, ArchiveRestore, ChevronDown, Copy, EyeOff, FolderOpen, GitBranch, HelpCircle, Shield, ShieldOff, X, AlertTriangle, Clock } from "lucide-react";
+import { Archive, ArchiveRestore, Ban, ChevronDown, Copy, EyeOff, FolderOpen, GitBranch, HelpCircle, Layers, Shield, ShieldOff, X, AlertTriangle, Clock, Timer } from "lucide-react";
 import { Button, IconButton } from "@/components/common/Button";
 import { Badge, GitBadge, SafetyBadge, StatusBadge } from "@/components/common/Badge";
 import { Checkbox, Menu } from "@/components/common/Controls";
@@ -19,6 +19,7 @@ export function ProjectDetailsDrawer() {
   const copyText = useAppStore((s) => s.copyText);
   const reviewHibernate = useAppStore((s) => s.reviewHibernate);
   const openWake = useAppStore((s) => s.openWake);
+  const excludeFolder = useAppStore((s) => s.excludeFolder);
   const [chosen, setChosen] = useState<Set<string> | null>(null);
   const [explain, setExplain] = useState<string | null>(null);
 
@@ -136,6 +137,33 @@ export function ProjectDetailsDrawer() {
                 <li key={r}>{r}</li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {p.workspaceMembers.length > 0 && (
+          <div className="mt-4 rounded-md border border-border px-3 py-2 text-[12px]">
+            <div className="flex items-center gap-1.5 font-medium text-fg">
+              <Layers size={13} className="text-fg-muted" /> Workspace · {p.workspaceMembers.length} member{p.workspaceMembers.length === 1 ? "" : "s"}
+            </div>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {p.workspaceMembers.slice(0, 24).map((m) => (
+                <span key={m} className="rounded border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-fg-muted">
+                  {m}
+                </span>
+              ))}
+              {p.workspaceMembers.length > 24 && <span className="text-fg-subtle">+{p.workspaceMembers.length - 24} more</span>}
+            </div>
+            <div className="mt-1 text-fg-subtle">Members share this project's artifacts, so nothing is counted twice.</div>
+          </div>
+        )}
+
+        {p.scanDurationMs > 5000 && (
+          <div className="mt-4 flex items-start gap-2 rounded-md bg-surface-2 px-3 py-2 text-[12px] text-fg-muted">
+            <Timer size={14} className="mt-0.5 shrink-0" />
+            <div>
+              Measuring this project took {(p.scanDurationMs / 1000).toFixed(0)}s.
+              {p.cacheHits > 0 ? ` ${p.cacheHits} folder size${p.cacheHits === 1 ? "" : "s"} came from the cache.` : " Unchanged folders are reused on the next scan."}
+            </div>
           </div>
         )}
 
@@ -293,6 +321,8 @@ export function ProjectDetailsDrawer() {
                 { label: "Hide for 90 days", onSelect: () => ignore(p.id, 90) },
                 { separator: true, label: "" },
                 { label: "Hide until restored", onSelect: () => ignore(p.id, null) },
+                { separator: true, label: "" },
+                { label: "Exclude from future scans", icon: <Ban size={13} />, danger: true, onSelect: () => excludeFolder(p.path) },
               ]}
             />
           )}

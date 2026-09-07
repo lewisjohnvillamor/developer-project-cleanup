@@ -45,7 +45,18 @@ pub const MARKERS: &[(&str, Stack)] = &[
     ("pubspec.yaml", Stack::Dart),
     ("Gemfile", Stack::Ruby),
     ("composer.json", Stack::Php),
+    ("Package.swift", Stack::Swift),
+    ("mix.exs", Stack::Elixir),
+    ("stack.yaml", Stack::Haskell),
+    ("cabal.project", Stack::Haskell),
+    ("build.zig", Stack::Zig),
 ];
+
+/// File suffixes that mark a Haskell package.
+pub const HASKELL_SUFFIXES: &[&str] = &[".cabal"];
+
+/// File suffixes that mark a Terraform / OpenTofu root module.
+pub const TERRAFORM_SUFFIXES: &[&str] = &[".tf"];
 
 /// File suffixes that mark a .NET project or solution.
 pub const DOTNET_SUFFIXES: &[&str] = &[".sln", ".csproj", ".fsproj", ".vbproj"];

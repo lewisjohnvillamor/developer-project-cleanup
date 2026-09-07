@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { ArchiveRestore, Check, Loader2, Play, X, XCircle } from "lucide-react";
+import { AlertTriangle, ArchiveRestore, Check, Loader2, Play, X, XCircle } from "lucide-react";
 import { Button } from "@/components/common/Button";
 import { Dialog } from "@/components/common/Dialog";
 import { useAppStore } from "@/stores/app-store";
@@ -33,7 +33,7 @@ export function WakeDialog() {
             <Button variant="ghost" onClick={close}>
               Cancel
             </Button>
-            <Button variant="primary" icon={<Play size={14} />} onClick={run}>
+            <Button variant="primary" icon={<Play size={14} />} onClick={run} disabled={plan.steps.length === 0} title={plan.missingTools.length ? "A required tool is missing; the run will fail" : undefined}>
               Run Command{plan.steps.length > 1 ? "s" : ""}
             </Button>
           </>
@@ -69,6 +69,15 @@ export function WakeDialog() {
           <span className="text-fg-muted">Runs inside</span>
           <span className="truncate font-mono text-[12px] text-fg selectable">{plan.cwd}</span>
         </div>
+        {plan.missingTools.length > 0 && (
+          <div className="flex items-start gap-2 rounded-md border border-review/30 bg-review-soft/50 px-3 py-2 text-[12px] text-review">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+            <div>
+              <div className="font-medium">Not found on PATH: {plan.missingTools.map((t) => <code key={t} className="mx-0.5 rounded bg-surface px-1 font-mono">{t}</code>)}</div>
+              <div className="text-fg-muted">Install it, or make sure the app was started from a shell where it is available.</div>
+            </div>
+          </div>
+        )}
         {w.stage === "confirm" && plan.notes.length > 0 && (
           <ul className="text-[11.5px] text-fg-subtle">
             {plan.notes.map((n) => (

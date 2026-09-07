@@ -6,8 +6,10 @@
 //! what can be rebuilt**. Nothing in this crate deletes source code. Every
 //! removal goes through [`cleanup::safety`] first.
 
+pub mod caches;
 pub mod cleanup;
 pub mod config;
+pub mod export;
 pub mod format;
 pub mod git;
 pub mod history;

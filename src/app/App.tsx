@@ -1,8 +1,10 @@
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
+import { CommandPalette } from "@/components/common/CommandPalette";
 import { AppShell } from "@/components/layout/AppShell";
 import { HibernateDialog } from "@/components/projects/HibernateDialog";
 import { WakeDialog } from "@/components/projects/WakeDialog";
+import { useShortcuts } from "@/hooks/useShortcuts";
 import { useTheme } from "@/hooks/useTheme";
 import { HistoryPage } from "@/pages/HistoryPage";
 import { OverviewPage } from "@/pages/OverviewPage";
@@ -15,6 +17,7 @@ export function App() {
   const init = useAppStore((s) => s.init);
   const page = useAppStore((s) => s.page);
   useTheme();
+  useShortcuts();
 
   useEffect(() => {
     init().catch((err) => console.error("init failed", err));
@@ -47,6 +50,7 @@ export function App() {
       {page === "settings" && <SettingsPage />}
       <HibernateDialog />
       <WakeDialog />
+      <CommandPalette />
     </AppShell>
   );
 }

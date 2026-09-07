@@ -56,6 +56,12 @@ pub fn safety(project: &Project) -> (Safety, Vec<String>) {
             GitState::NoRepo => reasons.push("Not a Git repository".into()),
             _ => {}
         }
+        if git.is_repo
+            && git.remote_configured == Some(false)
+            && matches!(git.state, GitState::Modified | GitState::Untracked)
+        {
+            reasons.push("No remote and uncommitted work: this folder may be the only copy".into());
+        }
     }
     let review = project
         .artifacts

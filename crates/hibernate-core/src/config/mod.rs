@@ -74,6 +74,13 @@ pub struct Settings {
     pub ignored_paths: Vec<PathBuf>,
     pub custom_rules: Vec<CleanupRule>,
     pub protected_patterns: Vec<String>,
+    /// Reuse cached sizes for unchanged artifact trees between scans.
+    pub incremental_scans: bool,
+    /// Hours between automatic background scans. 0 disables them.
+    pub scheduled_scan_hours: u32,
+    /// Notify after a scheduled scan when at least this many bytes are
+    /// safely reclaimable.
+    pub notify_threshold_bytes: u64,
 }
 
 impl Default for Settings {
@@ -93,6 +100,9 @@ impl Default for Settings {
             ignored_paths: Vec::new(),
             custom_rules: Vec::new(),
             protected_patterns: Vec::new(),
+            incremental_scans: true,
+            scheduled_scan_hours: 0,
+            notify_threshold_bytes: 1_000_000_000,
         }
     }
 }
@@ -111,6 +121,7 @@ impl Settings {
             dormant_after_days: self.dormant_after_days.max(1),
             inspect_git: self.inspect_git,
             rules: self.rule_set(),
+            tree_cache: None,
         }
     }
 
@@ -119,6 +130,7 @@ impl Settings {
         self.quarantine_retention_days = self.quarantine_retention_days.clamp(1, 365);
         self.dormant_after_days = self.dormant_after_days.clamp(1, 3650);
         self.max_concurrency = self.max_concurrency.min(64);
+        self.scheduled_scan_hours = self.scheduled_scan_hours.min(24 * 30);
         self.scan_roots.retain(|p| !p.as_os_str().is_empty());
         self.scan_roots.dedup();
         self
@@ -191,6 +203,8 @@ pub struct AppPaths {
     pub history_file: PathBuf,
     pub quarantine_dir: PathBuf,
     pub last_scan_file: PathBuf,
+    pub tree_cache_file: PathBuf,
+    pub scan_trend_file: PathBuf,
 }
 
 impl AppPaths {
@@ -215,6 +229,8 @@ impl AppPaths {
             history_file: dir.join("history.json"),
             quarantine_dir: dir.join("quarantine"),
             last_scan_file: dir.join("last-scan.json"),
+            tree_cache_file: dir.join("tree-cache.json"),
+            scan_trend_file: dir.join("scan-trend.json"),
         }
     }
 
