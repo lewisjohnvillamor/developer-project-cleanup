@@ -133,33 +133,51 @@ fn hash_time(hash: &mut u64, t: SystemTime) {
     hash_bytes(hash, &nanos.to_le_bytes());
 }
 
+/// Hash one directory entry. Only *files* contribute a size and timestamp:
+/// directory metadata is deliberately excluded because it is not portable.
+/// NTFS updates a directory's modification time lazily, so hashing it made
+/// the fingerprint differ between two consecutive scans on Windows and the
+/// cache never hit; some network filesystems never update it at all, which
+/// would have hidden real changes. A directory contributes only its name, and
+/// anything that happens inside it is caught by that directory's own entries.
+fn hash_entry(hash: &mut u64, name: &str, meta: &fs::Metadata, is_dir: bool) {
+    hash_bytes(hash, name.as_bytes());
+    hash_bytes(hash, &[is_dir as u8]);
+    if is_dir {
+        return;
+    }
+    hash_bytes(hash, &meta.len().to_le_bytes());
+    if let Ok(modified) = meta.modified() {
+        hash_time(hash, modified);
+    }
+}
+
 /// Fingerprint a directory from two levels of metadata. `None` when the
 /// directory cannot be read.
+///
+/// Changing this function invalidates existing cache entries, which is
+/// harmless: they simply miss once, are re-measured, and are then replaced.
 pub fn fingerprint(dir: &Path) -> Option<u64> {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    let meta = fs::metadata(dir).ok()?;
-    hash_time(&mut hash, meta.modified().ok()?);
+    // The directory must exist and be readable, but its own timestamp is not
+    // part of the hash (see `hash_entry`).
+    fs::metadata(dir).ok()?;
 
     let mut child_dirs: Vec<PathBuf> = Vec::new();
-    let mut children: Vec<(String, u64, Option<SystemTime>, bool)> = Vec::new();
+    let mut children: Vec<(String, fs::Metadata, bool)> = Vec::new();
     for entry in fs::read_dir(dir).ok()?.flatten() {
         let Ok(md) = entry.metadata() else { continue };
         let name = entry.file_name().to_string_lossy().into_owned();
         let is_dir = md.is_dir() && !md.file_type().is_symlink();
-        children.push((name, md.len(), md.modified().ok(), is_dir));
         if is_dir {
             child_dirs.push(entry.path());
         }
+        children.push((name, md, is_dir));
     }
     // Sort so the hash does not depend on directory iteration order.
     children.sort_by(|a, b| a.0.cmp(&b.0));
-    for (name, len, modified, is_dir) in &children {
-        hash_bytes(&mut hash, name.as_bytes());
-        hash_bytes(&mut hash, &len.to_le_bytes());
-        hash_bytes(&mut hash, &[*is_dir as u8]);
-        if let Some(m) = modified {
-            hash_time(&mut hash, *m);
-        }
+    for (name, md, is_dir) in &children {
+        hash_entry(&mut hash, name, md, *is_dir);
     }
 
     if child_dirs.len() > MAX_CHILD_DIRS {
@@ -170,23 +188,16 @@ pub fn fingerprint(dir: &Path) -> Option<u64> {
         let Ok(entries) = fs::read_dir(&child) else {
             continue;
         };
-        let mut grand: Vec<(String, u64, Option<SystemTime>)> = Vec::new();
+        let mut grand: Vec<(String, fs::Metadata, bool)> = Vec::new();
         for entry in entries.flatten() {
             let Ok(md) = entry.metadata() else { continue };
-            grand.push((
-                entry.file_name().to_string_lossy().into_owned(),
-                md.len(),
-                md.modified().ok(),
-            ));
+            let is_dir = md.is_dir() && !md.file_type().is_symlink();
+            grand.push((entry.file_name().to_string_lossy().into_owned(), md, is_dir));
         }
         grand.sort_by(|a, b| a.0.cmp(&b.0));
         hash_bytes(&mut hash, &(grand.len() as u64).to_le_bytes());
-        for (name, len, modified) in grand {
-            hash_bytes(&mut hash, name.as_bytes());
-            hash_bytes(&mut hash, &len.to_le_bytes());
-            if let Some(m) = modified {
-                hash_time(&mut hash, m);
-            }
+        for (name, md, is_dir) in &grand {
+            hash_entry(&mut hash, name, md, *is_dir);
         }
     }
     Some(hash)
@@ -217,6 +228,31 @@ mod tests {
         // Size change of a grandchild file.
         write(&nm.join("a/extra.js"), 20);
         assert_ne!(f2, fingerprint(&nm).unwrap());
+    }
+
+    /// A directory's own timestamp must not affect the fingerprint. Creating
+    /// and deleting a file leaves the contents identical but advances the
+    /// parent directory's modification time; hashing that time made the
+    /// fingerprint unstable on Windows, so the cache never hit there.
+    #[test]
+    fn directory_timestamps_do_not_affect_the_fingerprint() {
+        let tmp = tempdir().unwrap();
+        let nm = tmp.path().join("node_modules");
+        write(&nm.join("pkg/index.js"), 10);
+        let before = fingerprint(&nm).unwrap();
+
+        let scratch = nm.join("pkg/.tmp-write");
+        fs::write(&scratch, b"transient").unwrap();
+        fs::remove_file(&scratch).unwrap();
+
+        assert_eq!(
+            before,
+            fingerprint(&nm).unwrap(),
+            "directory mtime changed but contents did not; fingerprint must be stable"
+        );
+        // A real content change is still detected.
+        write(&nm.join("pkg/index.js"), 20);
+        assert_ne!(before, fingerprint(&nm).unwrap());
     }
 
     #[test]

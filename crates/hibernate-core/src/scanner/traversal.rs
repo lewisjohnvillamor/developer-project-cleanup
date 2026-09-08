@@ -217,16 +217,8 @@ mod tests {
         touch(&r.join("workspace/backend/target/debug/x"), "");
         touch(&r.join("notes/todo.txt"), "");
         let found = run(r, false);
-        let mut paths: Vec<String> = found
-            .iter()
-            .map(|p| {
-                p.path
-                    .strip_prefix(r)
-                    .unwrap()
-                    .to_string_lossy()
-                    .into_owned()
-            })
-            .collect();
+        // `relative_slash` so the expectations below hold on Windows too.
+        let mut paths: Vec<String> = found.iter().map(|p| relative_slash(r, &p.path)).collect();
         paths.sort();
         assert_eq!(paths, vec!["workspace/backend", "workspace/frontend"]);
     }
@@ -241,16 +233,8 @@ mod tests {
         // A different ecosystem inside the workspace is still its own project.
         touch(&r.join("mono/tools/cli/Cargo.toml"), "[package]");
         let found = run(r, false);
-        let mut paths: Vec<String> = found
-            .iter()
-            .map(|p| {
-                p.path
-                    .strip_prefix(r)
-                    .unwrap()
-                    .to_string_lossy()
-                    .into_owned()
-            })
-            .collect();
+        // `relative_slash` so the expectations below hold on Windows too.
+        let mut paths: Vec<String> = found.iter().map(|p| relative_slash(r, &p.path)).collect();
         paths.sort();
         assert_eq!(paths, vec!["mono", "mono/tools/cli"]);
         let cli = found.iter().find(|p| p.path.ends_with("cli")).unwrap();
@@ -271,16 +255,8 @@ mod tests {
         // Not a declared member: a separate project.
         touch(&r.join("mono/examples/demo/package.json"), "{}");
         let found = run(r, false);
-        let mut paths: Vec<String> = found
-            .iter()
-            .map(|p| {
-                p.path
-                    .strip_prefix(r)
-                    .unwrap()
-                    .to_string_lossy()
-                    .into_owned()
-            })
-            .collect();
+        // `relative_slash` so the expectations below hold on Windows too.
+        let mut paths: Vec<String> = found.iter().map(|p| relative_slash(r, &p.path)).collect();
         paths.sort();
         assert_eq!(paths, vec!["mono", "mono/examples/demo"]);
     }
