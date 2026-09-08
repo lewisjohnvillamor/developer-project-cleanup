@@ -48,15 +48,20 @@ try {
   await shot(page, "03-drawer");
   await page.keyboard.press("Escape");
 
-  // Command palette.
+  // Command palette. Wait for it to unmount before sending the next
+  // shortcut: while its input still has focus the shortcut is ignored by
+  // design, which would otherwise make the next step racy.
   await page.keyboard.press("Control+k");
   await page.waitForSelector("[aria-label='Command palette']");
   await page.keyboard.type("full");
   await page.keyboard.press("Escape");
+  await page.waitForSelector("[aria-label='Command palette']", { state: "detached" });
 
   // Review, untick one folder, hibernate.
+  // Scope the wait to the dialog: "Estimated recovery" also appears in the
+  // bulk action bar, so an unscoped wait passes before the dialog opens.
   await page.keyboard.press("h");
-  await page.waitForSelector("text=Estimated recovery");
+  await page.waitForSelector("[role=dialog]:has-text('Estimated recovery')");
   await page.click("[role=dialog] button:has-text('Review files')");
   const before = await page.locator("[role=dialog] .text-accent").first().innerText();
   await page.locator("[role=dialog] [role=checkbox][aria-checked='true']").first().click();

@@ -661,7 +661,7 @@ pub fn preview_matches(
             }
         }
     }
-    out.sort_by(|a, b| b.bytes.cmp(&a.bytes));
+    out.sort_by_key(|m| std::cmp::Reverse(m.bytes));
     out
 }
 

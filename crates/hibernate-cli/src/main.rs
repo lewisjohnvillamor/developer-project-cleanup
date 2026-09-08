@@ -470,11 +470,9 @@ fn cmd_scan(
         s.project_count,
         format::bytes(s.total_bytes),
         format::bytes(s.reclaimable_bytes),
-        if s.total_bytes > 0 {
-            s.reclaimable_bytes * 100 / s.total_bytes
-        } else {
-            0
-        },
+        (s.reclaimable_bytes * 100)
+            .checked_div(s.total_bytes)
+            .unwrap_or(0),
         if s.review_bytes > 0 {
             format!(" · {} more needs review", format::bytes(s.review_bytes))
         } else {

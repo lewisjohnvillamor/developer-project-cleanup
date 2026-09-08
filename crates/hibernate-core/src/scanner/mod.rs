@@ -115,7 +115,7 @@ impl ScanSummary {
             }
         }
         totals.retain(|t| t.count > 0);
-        totals.sort_by(|a, b| b.bytes.cmp(&a.bytes));
+        totals.sort_by_key(|t| std::cmp::Reverse(t.bytes));
         ScanSummary {
             roots: roots.to_vec(),
             project_count: projects.len(),

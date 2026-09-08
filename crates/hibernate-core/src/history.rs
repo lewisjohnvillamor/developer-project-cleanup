@@ -114,7 +114,7 @@ impl HistoryEntry {
             .iter()
             .map(|p| (p.name.as_str(), p.bytes_recovered))
             .collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|entry| std::cmp::Reverse(entry.1));
         v.truncate(n);
         v
     }

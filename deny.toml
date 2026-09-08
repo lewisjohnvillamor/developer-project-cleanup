@@ -10,7 +10,39 @@ targets = [
 [advisories]
 version = 2
 yanked = "deny"
-ignore = []
+
+# Every entry below is an *unmaintained* or *unsound* advisory in a transitive
+# dependency of the Tauri desktop shell. None is a vulnerability, none is
+# reachable from `hibernate-core` or `hibernate-cli` (verified with
+# `cargo tree -i <crate> -p hibernate-cli`), and none can be resolved here:
+# they resolve when Tauri moves off the deprecated gtk-rs 0.18 bindings.
+#
+# This list is deliberately explicit rather than a blanket "allow warnings",
+# so a newly unmaintained or unsound crate still fails the build.
+# Re-check with `cargo audit` after every Tauri upgrade and delete what no
+# longer applies.
+ignore = [
+  # gtk-rs 0.18 bindings, unmaintained since 2024-2025 (via tauri -> muda -> gtk).
+  { id = "RUSTSEC-2024-0411", reason = "gdkwayland-sys unmaintained; transitive via Tauri's Linux backend" },
+  { id = "RUSTSEC-2024-0412", reason = "gdk unmaintained; transitive via Tauri's Linux backend" },
+  { id = "RUSTSEC-2024-0413", reason = "atk unmaintained; transitive via Tauri's Linux backend" },
+  { id = "RUSTSEC-2024-0414", reason = "gdkx11-sys unmaintained; transitive via Tauri's Linux backend" },
+  { id = "RUSTSEC-2024-0415", reason = "gtk unmaintained; transitive via Tauri's Linux backend" },
+  { id = "RUSTSEC-2024-0416", reason = "atk-sys unmaintained; transitive via Tauri's Linux backend" },
+  { id = "RUSTSEC-2024-0417", reason = "gdkx11 unmaintained; transitive via Tauri's Linux backend" },
+  { id = "RUSTSEC-2024-0418", reason = "gdk-sys unmaintained; transitive via Tauri's Linux backend" },
+  { id = "RUSTSEC-2024-0419", reason = "gtk3-macros unmaintained; transitive via Tauri's Linux backend" },
+  { id = "RUSTSEC-2024-0420", reason = "gtk-sys unmaintained; transitive via Tauri's Linux backend" },
+  { id = "RUSTSEC-2024-0429", reason = "glib VariantStrIter unsoundness; we never construct one, transitive via gtk" },
+  # Build-time macro helper, pulled in by glib-macros.
+  { id = "RUSTSEC-2024-0370", reason = "proc-macro-error unmaintained; build-time only, transitive via glib-macros" },
+  # unic-* family, pulled in by urlpattern via tauri-utils.
+  { id = "RUSTSEC-2025-0075", reason = "unic-char-range unmaintained; transitive via tauri-utils -> urlpattern" },
+  { id = "RUSTSEC-2025-0080", reason = "unic-common unmaintained; transitive via tauri-utils -> urlpattern" },
+  { id = "RUSTSEC-2025-0081", reason = "unic-char-property unmaintained; transitive via tauri-utils -> urlpattern" },
+  { id = "RUSTSEC-2025-0098", reason = "unic-ucd-version unmaintained; transitive via tauri-utils -> urlpattern" },
+  { id = "RUSTSEC-2025-0100", reason = "unic-ucd-ident unmaintained; transitive via tauri-utils -> urlpattern" },
+]
 
 [licenses]
 version = 2

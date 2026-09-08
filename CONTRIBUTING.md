@@ -64,7 +64,19 @@ Anything in `cleanup/` (safety, remove, trash, quarantine, hibernate) needs:
 
 ## Style
 
-- Rust: `cargo fmt`, `cargo clippy --all-targets -- -D warnings`.
+- Rust: `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`.
+  CI lints with a **pinned** toolchain (`RUST_LINT_VERSION` in
+  `.github/workflows/ci.yml`) so a new Rust release cannot fail `main` on its
+  own. Match it locally with:
+
+  ```bash
+  rustup toolchain install 1.98.0 --component clippy,rustfmt
+  rustup run 1.98.0 cargo clippy --workspace --all-targets -- -D warnings
+  ```
+
+  A separate advisory job runs clippy on the latest stable and is allowed to
+  fail; when it reports something real, fix it and bump `RUST_LINT_VERSION`
+  in the same pull request.
 - TypeScript: `npm run lint` (Biome). `npm run format` fixes what it can.
 - Keep commands and the CLI thin; put behaviour in the engine so both share it.
 - User-facing text: plain sentences, no exclamation marks, no scary red screens.
