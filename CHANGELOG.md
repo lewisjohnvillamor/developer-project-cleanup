@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Fixed
+- Flaky UI walkthrough: it waited for the text "Estimated recovery", which appears in both the bulk action bar and the hibernate dialog, so the wait passed before the dialog had opened. The wait is now scoped to the dialog, and the walkthrough waits for the command palette to unmount before sending the next shortcut. CI uploads screenshots when the walkthrough fails.
 - **Incremental scans never took effect on Windows.** The tree fingerprint hashed directory modification times, which NTFS updates lazily, so a rescan saw a different fingerprint and re-measured everything. It now hashes file metadata only; directories contribute their name, and changes inside them are caught by their own entries. Sizes were always correct, so this was a lost optimisation rather than a correctness bug. Found by the Windows CI job.
 - Three scanner tests compared paths built with `/` against `std` output that uses `\` on Windows; they now use the module's `relative_slash` helper.
 - Clippy failures on `main` after Rust 1.98 introduced `unnecessary_sort_by` and `manual_checked_ops`; six call sites updated.

@@ -20,3 +20,6 @@ Thumbs.db
 npm-debug.log*
 # Test scratch
 /tmp/
+
+# e2e artifacts
+e2e-screenshots/

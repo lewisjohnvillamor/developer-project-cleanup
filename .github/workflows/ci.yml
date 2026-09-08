@@ -132,7 +132,19 @@ jobs:
       - name: Start dev server
         run: npx vite --port 1420 --strictPort &
       - run: npx wait-on http://localhost:1420
-      - run: npm run e2e
+      - name: Walkthrough
+        env:
+          SHOTS: e2e-screenshots
+        run: |
+          mkdir -p e2e-screenshots
+          npm run e2e
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: e2e-screenshots
+          if-no-files-found: ignore
 
   desktop:
     name: Desktop app (${{ matrix.os }})
