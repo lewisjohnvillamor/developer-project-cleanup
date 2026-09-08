@@ -140,7 +140,7 @@ jobs:
           npm run e2e
       - name: Upload screenshots on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-screenshots
           path: e2e-screenshots
@@ -180,7 +180,7 @@ jobs:
           npm run smoke:desktop
       - name: Bundle
         run: npx tauri build --ci
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: project-hibernate-${{ matrix.os }}
           path: |
