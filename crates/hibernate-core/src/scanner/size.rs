@@ -189,7 +189,7 @@ pub fn measure(
 
     m.protected_entries.sort();
     m.protected_entries.truncate(16);
-    m.artifacts.sort_by(|a, b| b.bytes.cmp(&a.bytes));
+    m.artifacts.sort_by_key(|a| std::cmp::Reverse(a.bytes));
     m
 }
 

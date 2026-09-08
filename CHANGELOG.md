@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixed
+- Clippy failures on `main` after Rust 1.98 introduced `unnecessary_sort_by` and `manual_checked_ops`; six call sites updated.
+- The dependency audit job failed with "Resource not accessible by integration" because `rustsec/audit-check` needs `checks: write`, which fork pull requests never receive. `cargo audit` now runs directly, and the workflow declares least-privilege `contents: read`.
+
+### Changed
+- Rust lint and format now run once on a pinned toolchain (`RUST_LINT_VERSION`) instead of three times on rolling stable, so a Rust release cannot turn `main` red on its own. A separate advisory job reports new lints from the latest stable without failing the build.
+
 ### Added
 - Incremental scans: `node_modules/`, `target/`, `.git/` and other large trees are fingerprinted (two levels of modification times) and their sizes reused when unchanged. "Full rescan" and a cache-clear button bypass it.
 - Scheduled background scans with a system notification when the reclaimable total passes a threshold.
