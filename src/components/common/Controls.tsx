@@ -7,7 +7,13 @@ export function Toggle({
   label,
   description,
   disabled,
-}: { checked: boolean; onChange: (v: boolean) => void; label: ReactNode; description?: ReactNode; disabled?: boolean }) {
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: ReactNode;
+  description?: ReactNode;
+  disabled?: boolean;
+}) {
   return (
     <label className={`flex cursor-pointer items-start justify-between gap-4 py-2 ${disabled ? "opacity-50" : ""}`}>
       <span>
@@ -34,7 +40,13 @@ export function Checkbox({
   onChange,
   disabled,
   title,
-}: { checked: boolean; indeterminate?: boolean; onChange: (v: boolean) => void; disabled?: boolean; title?: string }) {
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+  title?: string;
+}) {
   return (
     <button
       type="button"
@@ -60,7 +72,12 @@ export function Select<T extends string>({
   onChange,
   options,
   className = "",
-}: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[]; className?: string }) {
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string }[];
+  className?: string;
+}) {
   return (
     <div className={`relative ${className}`}>
       <select
@@ -118,7 +135,14 @@ export function NumberInput({
   max,
   className = "",
   suffix,
-}: { value: number; onChange: (v: number) => void; min?: number; max?: number; className?: string; suffix?: string }) {
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  className?: string;
+  suffix?: string;
+}) {
   return (
     <div className={`flex items-center gap-2 ${className}`}>
       <input
@@ -141,7 +165,11 @@ export function RadioGroup<T extends string>({
   value,
   onChange,
   options,
-}: { value: T; onChange: (v: T) => void; options: { value: T; label: ReactNode; description?: ReactNode; tone?: "danger" }[] }) {
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: ReactNode; description?: ReactNode; tone?: "danger" }[];
+}) {
   return (
     <div className="flex flex-col gap-1.5">
       {options.map((o) => (
@@ -175,7 +203,12 @@ export function Menu({
   items,
   align = "left",
   className = "",
-}: { trigger: (open: boolean) => ReactNode; items: MenuItem[]; align?: "left" | "right"; className?: string }) {
+}: {
+  trigger: (open: boolean) => ReactNode;
+  items: MenuItem[];
+  align?: "left" | "right";
+  className?: string;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -195,7 +228,7 @@ export function Menu({
       const els = itemsEls();
       if (!els.length) return;
       e.preventDefault();
-      const idx = els.findIndex((el) => el === document.activeElement);
+      const idx = els.indexOf(document.activeElement as HTMLButtonElement);
       const next =
         e.key === "Home" ? 0 : e.key === "End" ? els.length - 1 : e.key === "ArrowDown" ? (idx + 1) % els.length : (idx - 1 + els.length) % els.length;
       els[next]?.focus();

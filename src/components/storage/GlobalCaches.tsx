@@ -1,8 +1,8 @@
+import { Copy, HardDrive, RefreshCw } from "lucide-react";
 import { Button, IconButton } from "@/components/common/Button";
 import { Card } from "@/components/common/Card";
 import { useAppStore } from "@/stores/app-store";
 import { formatBytes } from "@/utils/format";
-import { Copy, HardDrive, RefreshCw } from "lucide-react";
 
 /** Global toolchain caches: shown, never touched. */
 export function GlobalCaches() {

@@ -1,3 +1,6 @@
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import type {
   AppInfo,
   CacheInfo,
@@ -17,9 +20,6 @@ import type {
   WakeEvent,
   WakePlan,
 } from "@/types";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-import { open, save } from "@tauri-apps/plugin-dialog";
 import type { Backend } from "./backend";
 
 async function on<T>(name: string, handler: (payload: T) => void) {

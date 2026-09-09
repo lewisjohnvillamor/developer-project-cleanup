@@ -1,9 +1,9 @@
+import { Folder, FolderPlus, Search, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { Button, IconButton } from "@/components/common/Button";
 import { TextInput } from "@/components/common/Controls";
 import { Dialog } from "@/components/common/Dialog";
 import { useAppStore } from "@/stores/app-store";
-import { Folder, FolderPlus, Search, Trash2 } from "lucide-react";
-import { useState } from "react";
 
 const SUGGESTED = ["~/Projects", "~/Developer", "~/Code", "~/Documents/Projects"];
 

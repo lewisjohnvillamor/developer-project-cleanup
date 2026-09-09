@@ -1,20 +1,38 @@
 version: 2
 updates:
+  # Grouping needs `patterns` as well as `update-types`, otherwise every
+  # major bump opens its own pull request. Majors stay in their own group so
+  # they can be reviewed together but never ride along with a routine bump.
   - package-ecosystem: cargo
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
     groups:
-      rust-minor:
+      cargo:
+        patterns: ["*"]
         update-types: [minor, patch]
+      cargo-major:
+        patterns: ["*"]
+        update-types: [major]
+
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
     groups:
-      npm-minor:
+      npm:
+        patterns: ["*"]
         update-types: [minor, patch]
+      npm-major:
+        patterns: ["*"]
+        update-types: [major]
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]

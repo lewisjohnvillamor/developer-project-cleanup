@@ -1,3 +1,5 @@
+import { Loader2 } from "lucide-react";
+import { useEffect } from "react";
 import { CommandPalette } from "@/components/common/CommandPalette";
 import { AppShell } from "@/components/layout/AppShell";
 import { HibernateDialog } from "@/components/projects/HibernateDialog";
@@ -9,8 +11,6 @@ import { OverviewPage } from "@/pages/OverviewPage";
 import { ProjectsPage } from "@/pages/ProjectsPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { useAppStore } from "@/stores/app-store";
-import { Loader2 } from "lucide-react";
-import { useEffect } from "react";
 
 export function App() {
   const ready = useAppStore((s) => s.ready);

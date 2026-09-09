@@ -1,11 +1,11 @@
+import { AlertTriangle, ArchiveRestore, ChevronDown, ChevronRight, FolderOpen, History, ShieldAlert, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/common/Badge";
 import { Button } from "@/components/common/Button";
 import { EmptyState } from "@/components/common/Controls";
 import { useAppStore } from "@/stores/app-store";
-import { type HistoryEntry, describeOutcome, entryRestorable, outcomeIsError } from "@/types";
+import { describeOutcome, entryRestorable, type HistoryEntry, outcomeIsError } from "@/types";
 import { formatBytes, formatDate, formatDateTime, pluralize } from "@/utils/format";
-import { AlertTriangle, ArchiveRestore, ChevronDown, ChevronRight, FolderOpen, History, ShieldAlert, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
 
 const DISPOSITION_LABEL = { trash: "Trash", quarantine: "Quarantine", permanent: "Permanent" } as const;
 

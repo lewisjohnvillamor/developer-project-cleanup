@@ -1,13 +1,13 @@
+import { Archive, ArchiveRestore, ArrowDown, ArrowUp, EyeOff, FolderSearch, Shield } from "lucide-react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Badge, SafetyBadge, StatusBadge } from "@/components/common/Badge";
 import { Button } from "@/components/common/Button";
 import { Checkbox, EmptyState } from "@/components/common/Controls";
 import { useAppStore } from "@/stores/app-store";
 import type { Project } from "@/types";
 import { STACK_LABELS } from "@/types";
-import { type SortKey, bulkEligible, isIgnored, primaryLabel } from "@/utils/filters";
+import { bulkEligible, isIgnored, primaryLabel, type SortKey } from "@/utils/filters";
 import { formatBytes, formatDays, formatRelative } from "@/utils/format";
-import { Archive, ArchiveRestore, ArrowDown, ArrowUp, EyeOff, FolderSearch, Shield } from "lucide-react";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
 
 const COLUMNS: { key: SortKey | null; label: string; className: string }[] = [
   { key: null, label: "", className: "w-8" },
@@ -87,7 +87,7 @@ export function ProjectTable({ projects, scrollRef }: { projects: Project[]; scr
       const rows = Array.from(bodyRef.current?.querySelectorAll<HTMLTableRowElement>("tr[data-id]") ?? []);
       if (!rows.length) return;
       const active = document.activeElement as HTMLElement | null;
-      const idx = rows.findIndex((r) => r === active);
+      const idx = active ? rows.indexOf(active as HTMLTableRowElement) : -1;
       if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Home" || e.key === "End") {
         e.preventDefault();
         const next =

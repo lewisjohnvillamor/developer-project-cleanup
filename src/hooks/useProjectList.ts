@@ -1,6 +1,6 @@
+import { useMemo } from "react";
 import { useAppStore } from "@/stores/app-store";
 import { applyFilters, sortProjects } from "@/utils/filters";
-import { useMemo } from "react";
 
 /** Filtered + sorted projects for the table, memoised on the inputs. */
 export function useProjectList() {

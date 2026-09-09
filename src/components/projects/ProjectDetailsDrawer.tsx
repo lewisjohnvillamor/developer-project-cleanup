@@ -1,10 +1,3 @@
-import { Badge, GitBadge, SafetyBadge, StatusBadge } from "@/components/common/Badge";
-import { Button, IconButton } from "@/components/common/Button";
-import { Checkbox, Menu } from "@/components/common/Controls";
-import { useAppStore } from "@/stores/app-store";
-import { type CleanupArtifact, STACK_LABELS } from "@/types";
-import { isIgnored } from "@/utils/filters";
-import { formatBytes, formatCount, formatDate, formatRelative } from "@/utils/format";
 import {
   AlertTriangle,
   Archive,
@@ -24,6 +17,13 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { Badge, GitBadge, SafetyBadge, StatusBadge } from "@/components/common/Badge";
+import { Button, IconButton } from "@/components/common/Button";
+import { Checkbox, Menu } from "@/components/common/Controls";
+import { useAppStore } from "@/stores/app-store";
+import { type CleanupArtifact, STACK_LABELS } from "@/types";
+import { isIgnored } from "@/utils/filters";
+import { formatBytes, formatCount, formatDate, formatRelative } from "@/utils/format";
 
 export function ProjectDetailsDrawer() {
   const id = useAppStore((s) => s.drawerProjectId);

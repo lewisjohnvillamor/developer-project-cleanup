@@ -27,6 +27,13 @@ general cleaner.
   ecosystems, rule preview, Trash restore (Windows/Linux), export, trend,
   command palette, keyboard navigation.
 
+## Decided
+
+- **The name stays "Project Hibernate".** The collision with the Hibernate ORM
+  was raised and accepted: this is a desktop app for developers, not a Java
+  library, and the crate, bundle and package names are all unclaimed. Please
+  do not reopen this without a new argument.
+
 ## Next (in order)
 
 1. **Git-aware safety.** Treat anything Git tracks as protected, and use

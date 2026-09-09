@@ -1,8 +1,8 @@
+import { Archive, Download, FolderOpen, FolderPlus, History, LayoutDashboard, Monitor, Moon, RefreshCw, Search, Settings, Shield, Sun } from "lucide-react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "@/stores/app-store";
 import { primaryLabel } from "@/utils/filters";
 import { formatBytes } from "@/utils/format";
-import { Archive, Download, FolderOpen, FolderPlus, History, LayoutDashboard, Monitor, Moon, RefreshCw, Search, Settings, Shield, Sun } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Kbd } from "./Controls";
 
 interface Item {

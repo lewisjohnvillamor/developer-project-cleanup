@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Changed
+- Dependencies refreshed, superseding Dependabot #2-#10: GitHub Actions majors (checkout, setup-node, upload-artifact v7, tauri-action v1), Vite 8, Vitest 5, `@vitejs/plugin-react` 6, Biome 2 and wait-on 9.
+  - Vite 8 replaced esbuild with Oxc, so `build.minify` no longer names `"esbuild"`.
+  - Biome 2's config was migrated, its CSS parser told about Tailwind 4's at-rules, and its import-ordering assist applied across the frontend.
+  - The name stays **Project Hibernate**; the collision with the Hibernate ORM was considered and accepted, and is recorded in ROADMAP.md.
+- Dependabot now groups updates by ecosystem and severity, so a cycle opens about three pull requests instead of nine.
+
 ### Fixed
 - Flaky UI walkthrough: it waited for the text "Estimated recovery", which appears in both the bulk action bar and the hibernate dialog, so the wait passed before the dialog had opened. The wait is now scoped to the dialog, and the walkthrough waits for the command palette to unmount before sending the next shortcut. CI uploads screenshots when the walkthrough fails.
 - **Incremental scans never took effect on Windows.** The tree fingerprint hashed directory modification times, which NTFS updates lazily, so a rescan saw a different fingerprint and re-measured everything. It now hashes file metadata only; directories contribute their name, and changes inside them are caught by their own entries. Sizes were always correct, so this was a lost optimisation rather than a correctness bug. Found by the Windows CI job.

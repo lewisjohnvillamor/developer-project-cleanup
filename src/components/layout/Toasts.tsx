@@ -1,5 +1,5 @@
-import { useAppStore } from "@/stores/app-store";
 import { AlertCircle, CheckCircle2, Info, X } from "lucide-react";
+import { useAppStore } from "@/stores/app-store";
 
 export function Toasts() {
   const toasts = useAppStore((s) => s.toasts);

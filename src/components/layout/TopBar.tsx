@@ -1,8 +1,8 @@
+import { ChevronDown, Command, Download, FolderPlus, Loader2, RefreshCw, Search, X } from "lucide-react";
 import { Button } from "@/components/common/Button";
 import { Kbd, Menu, ProgressBar } from "@/components/common/Controls";
 import { useAppStore } from "@/stores/app-store";
 import { formatRelative } from "@/utils/format";
-import { ChevronDown, Command, Download, FolderPlus, Loader2, RefreshCw, Search, X } from "lucide-react";
 
 const TITLES: Record<string, string> = {
   overview: "Overview",

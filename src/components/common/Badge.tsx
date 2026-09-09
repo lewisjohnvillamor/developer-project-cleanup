@@ -1,7 +1,7 @@
-import type { GitState, ProjectStatus, Safety } from "@/types";
-import { GIT_STATE_LABELS } from "@/types";
 import { AlertTriangle, Archive, CheckCircle2, CircleDashed, CloudOff, GitBranch, GitCommitHorizontal, Moon, Shield, Zap } from "lucide-react";
 import type { ReactNode } from "react";
+import type { GitState, ProjectStatus, Safety } from "@/types";
+import { GIT_STATE_LABELS } from "@/types";
 
 export type Tone = "safe" | "review" | "danger" | "info" | "inactive" | "neutral" | "accent";
 
@@ -21,7 +21,13 @@ export function Badge({
   children,
   className = "",
   title,
-}: { tone?: Tone; icon?: ReactNode; children: ReactNode; className?: string; title?: string }) {
+}: {
+  tone?: Tone;
+  icon?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  title?: string;
+}) {
   return (
     <span
       title={title}
