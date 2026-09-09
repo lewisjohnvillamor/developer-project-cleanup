@@ -53,6 +53,9 @@ try {
   // design, which would otherwise make the next step racy.
   await page.keyboard.press("Control+k");
   await page.waitForSelector("[aria-label='Command palette']");
+  // The input takes focus a tick after mount; typing before that would send
+  // the keystrokes nowhere.
+  await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Search commands");
   await page.keyboard.type("full");
   await page.keyboard.press("Escape");
   await page.waitForSelector("[aria-label='Command palette']", { state: "detached" });

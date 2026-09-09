@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+- The command palette now closes on Escape wherever focus is. It was handled only on the search input, which is focused a tick after the palette opens, so a keystroke arriving in that gap left the palette stuck open.
+- **Windows junctions could take their target's contents with them.** A junction reports as a directory and does not always report as a symbolic link, so a recursive delete could descend through one and empty whatever it pointed at. Every walk in the engine now treats *any* reparse point as a link: never descended into, unlinked rather than followed. Symbolic links behaved correctly already; this closes the Windows-specific hole, and a test on the Windows runner creates a real junction and asserts its target survives.
+
 ### Added
 - **Git decides what is generated, not just the folder name.** A folder whose name matches a cleanup rule but that Git tracks holds committed or staged work, so it is now marked protected and never offered for removal, however well the name matches. Projects that commit their `dist/` are the common case. Conversely, a folder the repository ignores is flagged as confirmed generated. Costs two `git` calls per repository, over candidate folders only, and the details drawer explains which applies.
 

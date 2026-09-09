@@ -1,6 +1,7 @@
 //! Permanent removal that keeps going when individual files are locked or
 //! unreadable, and reports exactly what it could not remove.
 
+use crate::fsx;
 use crate::history::FailedPath;
 use std::fs;
 use std::io;
@@ -18,8 +19,9 @@ pub struct RemovalReport {
 
 const MAX_FAILURES_RECORDED: usize = 200;
 
-/// Remove a directory tree without following symlinks. Symlinks inside the
-/// tree are unlinked, never dereferenced.
+/// Remove a directory tree without following links out of it. Symbolic links
+/// and, on Windows, junctions and other reparse points are unlinked, never
+/// descended into, so whatever they point at is left untouched.
 pub fn remove_tree(root: &Path, cancel: &AtomicBool) -> RemovalReport {
     let mut report = RemovalReport::default();
     let mut dirs: Vec<PathBuf> = Vec::new();
@@ -40,13 +42,16 @@ pub fn remove_tree(root: &Path, cancel: &AtomicBool) -> RemovalReport {
         dirs.push(dir);
         for entry in entries.flatten() {
             let path = entry.path();
-            let Ok(ft) = entry.file_type() else { continue };
-            if ft.is_dir() {
+            // `DirEntry::metadata` does not follow links, and `is_real_dir`
+            // excludes Windows reparse points, which report as directories.
+            // Descending through one would delete whatever it points at.
+            let Ok(meta) = entry.metadata() else { continue };
+            if fsx::is_real_dir(&meta) {
                 stack.push(path);
                 continue;
             }
-            let len = entry.metadata().map(|m| m.len()).unwrap_or(0);
-            match remove_file_or_link(&path, ft.is_symlink()) {
+            let len = meta.len();
+            match remove_file_or_link(&path, fsx::is_link(&meta)) {
                 Ok(()) => {
                     report.bytes_removed += len;
                     report.files_removed += 1;
@@ -135,6 +140,45 @@ mod tests {
         assert!(!root.exists());
         assert!(keep.join("important").exists());
         assert!(report.failed.is_empty());
+    }
+
+    /// A junction reports `is_dir() == true`. If the walk descended through
+    /// one it would delete the target's contents, which is the whole point of
+    /// checking for reparse points rather than symlinks alone.
+    #[cfg(windows)]
+    #[test]
+    fn unlinks_junctions_without_following() {
+        use std::process::Command;
+        let tmp = tempdir().unwrap();
+        let keep = tmp.path().join("keep");
+        fs::create_dir_all(&keep).unwrap();
+        fs::write(keep.join("important"), "x").unwrap();
+
+        let root = tmp.path().join("node_modules");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("real.js"), "y").unwrap();
+        let junction = root.join("linked");
+        let made = Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(&junction)
+            .arg(&keep)
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if !made {
+            return; // junction creation unavailable
+        }
+
+        let report = remove_tree(&root, &AtomicBool::new(false));
+        assert!(
+            !root.exists(),
+            "the artifact itself is gone: {:?}",
+            report.failed
+        );
+        assert!(
+            keep.join("important").exists(),
+            "the junction's target must survive"
+        );
     }
 
     #[cfg(unix)]

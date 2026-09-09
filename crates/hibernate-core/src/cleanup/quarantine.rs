@@ -244,11 +244,11 @@ pub fn copy_tree(src: &Path, dst: &Path) -> io::Result<()> {
         fs::create_dir_all(&to)?;
         for entry in fs::read_dir(&from)? {
             let entry = entry?;
-            let ft = entry.file_type()?;
+            let meta = entry.metadata()?;
             let target = to.join(entry.file_name());
-            if ft.is_symlink() {
+            if crate::fsx::is_link(&meta) {
                 copy_symlink(&entry.path(), &target)?;
-            } else if ft.is_dir() {
+            } else if crate::fsx::is_real_dir(&meta) {
                 stack.push((entry.path(), target));
             } else {
                 fs::copy(entry.path(), target)?;

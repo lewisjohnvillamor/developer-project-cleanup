@@ -98,6 +98,21 @@ export function CommandPalette() {
 
   useEffect(() => setActive(0), [q]);
 
+  // Escape must close the palette wherever focus happens to be. Handling it
+  // only on the input meant a keystroke landing before the input took focus
+  // (it is focused a tick after mount) left the palette stuck open.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        setOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, setOpen]);
+
   if (!open) return null;
 
   const run = (item: Item) => {

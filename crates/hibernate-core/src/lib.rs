@@ -11,6 +11,7 @@ pub mod cleanup;
 pub mod config;
 pub mod export;
 pub mod format;
+pub mod fsx;
 pub mod git;
 pub mod history;
 pub mod model;

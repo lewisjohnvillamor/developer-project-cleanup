@@ -168,7 +168,7 @@ pub fn fingerprint(dir: &Path) -> Option<u64> {
     for entry in fs::read_dir(dir).ok()?.flatten() {
         let Ok(md) = entry.metadata() else { continue };
         let name = entry.file_name().to_string_lossy().into_owned();
-        let is_dir = md.is_dir() && !md.file_type().is_symlink();
+        let is_dir = crate::fsx::is_real_dir(&md);
         if is_dir {
             child_dirs.push(entry.path());
         }
@@ -191,7 +191,7 @@ pub fn fingerprint(dir: &Path) -> Option<u64> {
         let mut grand: Vec<(String, fs::Metadata, bool)> = Vec::new();
         for entry in entries.flatten() {
             let Ok(md) = entry.metadata() else { continue };
-            let is_dir = md.is_dir() && !md.file_type().is_symlink();
+            let is_dir = crate::fsx::is_real_dir(&md);
             grand.push((entry.file_name().to_string_lossy().into_owned(), md, is_dir));
         }
         grand.sort_by(|a, b| a.0.cmp(&b.0));
