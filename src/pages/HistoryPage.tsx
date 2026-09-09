@@ -5,6 +5,7 @@ import { Button } from "@/components/common/Button";
 import { EmptyState } from "@/components/common/Controls";
 import { useAppStore } from "@/stores/app-store";
 import { describeOutcome, entryRestorable, type HistoryEntry, outcomeIsError } from "@/types";
+import { DISPOSITION_VERB } from "@/utils/disposition";
 import { formatBytes, formatDate, formatDateTime, pluralize } from "@/utils/format";
 
 const DISPOSITION_LABEL = { trash: "Trash", quarantine: "Quarantine", permanent: "Permanent" } as const;
@@ -34,7 +35,8 @@ function Entry({ entry }: { entry: HistoryEntry }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-[13px]">
             <span className="font-semibold text-fg">
-              {pluralize(entry.projectCount, "project")} hibernated · <span className="tabular text-safe">{formatBytes(entry.totalRecovered)}</span> recovered
+              {pluralize(entry.projectCount, "project")} hibernated · <span className="tabular text-safe">{formatBytes(entry.totalRecovered)}</span>{" "}
+              {DISPOSITION_VERB[entry.disposition]}
             </span>
             {entry.errorCount > 0 && (
               <Badge tone="review" icon={<AlertTriangle size={11} />}>

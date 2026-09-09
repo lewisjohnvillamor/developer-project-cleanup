@@ -5,6 +5,7 @@ import { Checkbox, ProgressBar, Toggle } from "@/components/common/Controls";
 import { Dialog } from "@/components/common/Dialog";
 import { useAppStore } from "@/stores/app-store";
 import { describeOutcome, outcomeIsError } from "@/types";
+import { DISPOSITION_CAVEAT, DISPOSITION_VERB } from "@/utils/disposition";
 import { formatBytes, formatCount, pluralize } from "@/utils/format";
 
 const DISPOSITION_TEXT = {
@@ -296,8 +297,9 @@ export function HibernateDialog() {
         <div className="flex flex-col gap-4">
           <div className="flex items-baseline gap-3">
             <span className="text-[34px] font-semibold tabular tracking-tight text-safe">{formatBytes(entry.totalRecovered)}</span>
-            <span className="text-[13px] text-fg-muted">recovered</span>
+            <span className="text-[13px] text-fg-muted">{DISPOSITION_VERB[entry.disposition]}</span>
           </div>
+          {DISPOSITION_CAVEAT[entry.disposition] && <p className="-mt-2 text-[12px] text-fg-muted">{DISPOSITION_CAVEAT[entry.disposition]}</p>}
           <div className="grid grid-cols-2 gap-2 text-[12.5px]">
             <div className="rounded-md bg-surface-2 px-3 py-2">
               <div className="text-[11px] uppercase tracking-wide text-fg-muted">Projects hibernated</div>

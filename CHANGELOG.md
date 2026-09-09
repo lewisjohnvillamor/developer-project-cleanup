@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+- **Sizes now describe what removal would actually free.** They were file lengths, which are wrong in both directions: `node_modules` is thousands of tiny files that each occupy a whole block, so lengths understated it, while sparse files and pnpm's hard-linked store made lengths overstate it — a sample tree reported 10.6 MB against 106 KB actually allocated. Sizes are now bytes on disk, and a file hard-linked to something outside the tree counts only when every link to it lives inside, because otherwise removing the tree frees nothing for it. Unix reports allocated blocks directly; Windows uses the length, since `std` exposes no equivalent.
+- Cleanup results no longer claim space was "recovered" when it was only moved. The Trash and quarantine still occupy the disk, so they now read "moved to Trash" / "moved to quarantine" with the step needed to actually free it; only a permanent delete says "freed".
+
 ### Fixed
 - The command palette now closes on Escape wherever focus is. It was handled only on the search input, which is focused a tick after the palette opens, so a keystroke arriving in that gap left the palette stuck open.
 - **Windows junctions could take their target's contents with them.** A junction reports as a directory and does not always report as a symbolic link, so a recursive delete could descend through one and empty whatever it pointed at. Every walk in the engine now treats *any* reparse point as a link: never descended into, unlinked rather than followed. Symbolic links behaved correctly already; this closes the Windows-specific hole, and a test on the Windows runner creates a real junction and asserts its target survives.
