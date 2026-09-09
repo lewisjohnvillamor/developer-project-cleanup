@@ -234,6 +234,8 @@ mod tests {
             regeneratable: true,
             explanation: String::new(),
             restore_hint: None,
+            tracked_by_git: false,
+            ignored_by_git: false,
         }
     }
 

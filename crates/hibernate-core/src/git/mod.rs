@@ -4,6 +4,7 @@
 
 use crate::model::{GitInfo, GitState};
 use chrono::{DateTime, Utc};
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -213,5 +214,185 @@ mod tests {
         let info = inspect(tmp.path(), true);
         assert!(!info.is_repo);
         assert_eq!(info.state, GitState::NoRepo);
+    }
+}
+
+/// What Git says about a set of candidate artifact directories.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GitArtifactFacts {
+    /// Relative paths that contain at least one tracked file. Removing these
+    /// would delete work that is committed or staged, so they are never
+    /// treated as regeneratable however well their name matches a rule.
+    pub tracked: BTreeSet<String>,
+    /// Relative paths the repository's ignore rules exclude. This is positive
+    /// confirmation that the project itself considers them generated.
+    pub ignored: BTreeSet<String>,
+}
+
+/// Ask Git about candidate artifact directories, in two calls per project
+/// rather than one per directory.
+///
+/// `relative_dirs` are paths relative to the project root, with or without a
+/// trailing slash. Returns `None` when Git is unavailable or the project is
+/// not a repository, in which case callers keep their rule-based verdict.
+pub fn artifact_facts(project: &Path, relative_dirs: &[String]) -> Option<GitArtifactFacts> {
+    if relative_dirs.is_empty() || !git_available() || git_dir(project).is_none() {
+        return None;
+    }
+    let specs: Vec<String> = relative_dirs
+        .iter()
+        .map(|d| d.trim_end_matches('/').to_string())
+        .filter(|d| !d.is_empty())
+        .collect();
+    if specs.is_empty() {
+        return None;
+    }
+
+    let mut facts = GitArtifactFacts::default();
+
+    // Tracked: any file Git knows about beneath a candidate directory. The
+    // output is the file path, so map it back to the directory that contains it.
+    if let Some(out) = run_git(project, &["ls-files", "-z", "--"], &specs) {
+        for file in out.split('\0').filter(|s| !s.is_empty()) {
+            if let Some(dir) = specs.iter().find(|d| {
+                file == d.as_str()
+                    || file
+                        .strip_prefix(d.as_str())
+                        .is_some_and(|r| r.starts_with('/'))
+            }) {
+                facts.tracked.insert(dir.clone());
+            }
+        }
+    }
+
+    // Ignored: `check-ignore` only accepts -z together with --stdin, and
+    // feeding the paths in NUL-separated is also the only form that survives
+    // newlines in a path. It exits 1 when nothing matches, which is not an
+    // error, so a missing result simply means "none of them".
+    if let Some(out) = run_git_stdin(project, &["check-ignore", "-z", "--stdin"], &specs) {
+        for dir in out.split('\0').filter(|s| !s.is_empty()) {
+            facts.ignored.insert(dir.trim_end_matches('/').to_string());
+        }
+    }
+
+    Some(facts)
+}
+
+/// Run a git subcommand that reads NUL-separated paths on stdin.
+fn run_git_stdin(project: &Path, args: &[&str], specs: &[String]) -> Option<String> {
+    use std::io::Write;
+    let mut cmd = Command::new("git");
+    cmd.arg("-C")
+        .arg(project)
+        .args(args)
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    hide_window(&mut cmd);
+    let mut child = cmd.spawn().ok()?;
+    {
+        let mut stdin = child.stdin.take()?;
+        for spec in specs {
+            if stdin.write_all(spec.as_bytes()).is_err() || stdin.write_all(b"\0").is_err() {
+                break;
+            }
+        }
+    }
+    let output = child.wait_with_output().ok()?;
+    let text = String::from_utf8_lossy(&output.stdout).into_owned();
+    (!text.is_empty()).then_some(text)
+}
+
+/// Run a git subcommand with pathspecs, returning stdout when it produced any.
+fn run_git(project: &Path, args: &[&str], specs: &[String]) -> Option<String> {
+    let mut cmd = Command::new("git");
+    cmd.arg("-C")
+        .arg(project)
+        .args(args)
+        .args(specs)
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .stdin(Stdio::null())
+        .stderr(Stdio::null());
+    hide_window(&mut cmd);
+    let output = cmd.output().ok()?;
+    let text = String::from_utf8_lossy(&output.stdout).into_owned();
+    (!text.is_empty()).then_some(text)
+}
+
+#[cfg(test)]
+mod artifact_facts_tests {
+    use super::*;
+    use std::process::Command;
+
+    fn git(dir: &Path, args: &[&str]) {
+        let ok = Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .env("GIT_AUTHOR_NAME", "T")
+            .env("GIT_AUTHOR_EMAIL", "t@e")
+            .env("GIT_COMMITTER_NAME", "T")
+            .env("GIT_COMMITTER_EMAIL", "t@e")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        assert!(ok, "git {args:?} failed");
+    }
+
+    fn write(path: &Path, text: &str) {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    }
+
+    /// A folder whose name matches a cleanup rule but that Git tracks is
+    /// real work, not build output. A folder the repository ignores is
+    /// confirmed generated.
+    #[test]
+    fn separates_tracked_folders_from_ignored_ones() {
+        if !git_available() {
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path();
+        git(repo, &["init", "-q"]);
+
+        // `dist/` is committed here: some projects ship generated output.
+        write(&repo.join("dist/bundle.js"), "console.log(1)");
+        // `node_modules/` and `build/` are ignored, as usual.
+        write(&repo.join(".gitignore"), "node_modules/\nbuild/\n");
+        write(&repo.join("node_modules/left-pad/index.js"), "x");
+        write(&repo.join("build/out.o"), "x");
+        write(&repo.join("README.md"), "hi");
+        git(repo, &["add", "-A"]);
+        git(repo, &["commit", "-qm", "init"]);
+
+        let dirs = vec![
+            "dist/".to_string(),
+            "node_modules/".to_string(),
+            "build/".to_string(),
+        ];
+        let facts = artifact_facts(repo, &dirs).expect("a repository with candidates");
+
+        assert!(
+            facts.tracked.contains("dist"),
+            "committed dist/ must be seen as tracked"
+        );
+        assert!(!facts.tracked.contains("node_modules"));
+        assert!(!facts.tracked.contains("build"));
+
+        assert!(facts.ignored.contains("node_modules"));
+        assert!(facts.ignored.contains("build"));
+        assert!(!facts.ignored.contains("dist"));
+    }
+
+    #[test]
+    fn returns_nothing_outside_a_repository() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(artifact_facts(tmp.path(), &["dist/".to_string()]).is_none());
+        // No candidates means no work to do.
+        assert!(artifact_facts(tmp.path(), &[]).is_none());
     }
 }

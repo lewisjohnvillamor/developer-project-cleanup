@@ -229,6 +229,14 @@ pub struct CleanupArtifact {
     pub explanation: String,
     /// The command that brings it back, when known.
     pub restore_hint: Option<String>,
+    /// Git tracks at least one file inside this directory, so it holds
+    /// committed or staged work and is never offered for removal.
+    #[serde(default)]
+    pub tracked_by_git: bool,
+    /// The repository's own ignore rules exclude this directory, which is
+    /// positive confirmation that the project treats it as generated.
+    #[serde(default)]
+    pub ignored_by_git: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

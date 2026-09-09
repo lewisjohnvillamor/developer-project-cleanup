@@ -90,6 +90,10 @@ export interface CleanupArtifact {
   regeneratable: boolean;
   explanation: string;
   restoreHint: string | null;
+  /** Git tracks files inside this folder, so it is never offered for removal. */
+  trackedByGit: boolean;
+  /** The repository's own ignore rules exclude it, confirming it is generated. */
+  ignoredByGit: boolean;
 }
 
 export interface HibernationRecord {
