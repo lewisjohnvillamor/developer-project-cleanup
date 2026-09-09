@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { type Backend, getBackend } from "@/lib";
 import type {
+  AppError,
   AppInfo,
   ArtifactOutcome,
   ExportFormat,
@@ -303,6 +304,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
           break;
         }
       }
+    });
+
+    // A failed write means the screen and the disk now disagree. Say so
+    // rather than letting the next launch quietly contradict this one.
+    await backend.onAppError((e: AppError) => {
+      get().toast(`${e.operation} failed: ${e.message}. Changes made since the last successful save may be lost.`, "error");
     });
 
     await backend.onProjectsUpdated((updated) => {

@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import type {
+  AppError,
   AppInfo,
   CacheInfo,
   FolderInfo,
@@ -82,4 +83,6 @@ export const tauriBackend: Backend = {
   listQuarantine: () => invoke<QuarantineBatch[]>("list_quarantine"),
   purgeQuarantineBatch: (entryId) => invoke<number>("purge_quarantine_batch", { entryId }),
   getDiagnostics: () => invoke<string>("get_diagnostics"),
+
+  onAppError: (h) => on<AppError>("app-error", h),
 };

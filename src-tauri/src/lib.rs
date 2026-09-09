@@ -5,16 +5,22 @@
 //! - `hibernate-event`   — [`hibernate_core::HibernateEvent`]
 //! - `wake-event`        — [`commands::wake::WakeEvent`]
 //! - `projects-updated`  — `Vec<Project>` whose cached state changed
+//! - `app-error`         — [`state::AppError`], a write to disk that failed
 
 mod commands;
+mod logging;
 mod scheduler;
 mod state;
+#[cfg(test)]
+mod testing;
 
 use state::AppCtx;
 use std::sync::Arc;
+use tauri::Emitter;
 
 pub fn run() {
     let ctx = Arc::new(AppCtx::load());
+    logging::init(&ctx.paths.log_file, log::LevelFilter::Info);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -23,6 +29,13 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .manage(ctx.clone())
         .setup(move |app| {
+            // Let background threads report failed writes to the window.
+            let window = app.handle().clone();
+            ctx.on_error(move |err| {
+                // Nothing useful is left to do if the event itself cannot be
+                // delivered; `report` has already written the log line.
+                let _ = window.emit("app-error", err);
+            });
             // Expire old quarantine batches in the background.
             let purge_ctx = ctx.clone();
             std::thread::spawn(move || purge_ctx.purge_quarantine());

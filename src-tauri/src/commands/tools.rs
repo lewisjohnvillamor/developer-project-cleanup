@@ -97,7 +97,7 @@ pub async fn purge_quarantine_batch(
             }
         }
     }
-    let _ = ctx2.save_history();
+    ctx2.save_history().ok();
     Ok(bytes)
 }
 
@@ -123,6 +123,8 @@ pub fn get_diagnostics(ctx: State<'_, Arc<AppCtx>>) -> String {
         hibernate_core::git::git_available()
     ));
     out.push_str(&format!("data dir: {}\n", ctx.paths.data_dir.display()));
+    // Where the log file the user should attach actually lives.
+    out.push_str(&format!("log file: {}\n", ctx.paths.log_file.display()));
     out.push_str(&format!(
         "tree cache entries: {}\n",
         AppCtx::lock(&ctx.tree_cache).len()

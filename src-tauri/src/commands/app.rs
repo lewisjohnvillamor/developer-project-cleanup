@@ -87,7 +87,7 @@ pub fn open_project_folder(
         let mut state = AppCtx::lock(&ctx.state);
         state.touch_activity(&path, Utc::now());
     }
-    let _ = ctx.save_state();
+    ctx.save_state().ok();
     Ok(())
 }
 

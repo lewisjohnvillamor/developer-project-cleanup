@@ -167,6 +167,13 @@ export type ScanEvent =
   | { type: "finished"; summary: ScanSummary }
   | { type: "cancelled"; scanned: number; discovered: number };
 
+/** A write to disk that failed. The screen and the disk now disagree. */
+export interface AppError {
+  operation: string;
+  path: string;
+  message: string;
+}
+
 export interface ScanSnapshot {
   projects: Project[];
   summary: ScanSummary | null;

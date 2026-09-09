@@ -3,6 +3,7 @@
 // so the UI can be developed and screenshotted without Rust.
 
 import type {
+  AppError,
   AppInfo,
   CacheInfo,
   ExportFormat,
@@ -71,6 +72,9 @@ export interface Backend {
   listQuarantine(): Promise<QuarantineBatch[]>;
   purgeQuarantineBatch(entryId: string): Promise<number>;
   getDiagnostics(): Promise<string>;
+
+  /** A write to disk that failed. Reported so a lost record is never silent. */
+  onAppError(handler: (e: AppError) => void): Promise<Unlisten>;
 }
 
 export function isTauri(): boolean {
