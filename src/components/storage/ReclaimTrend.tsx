@@ -1,7 +1,7 @@
+import { TrendingDown, TrendingUp } from "lucide-react";
 import { Card } from "@/components/common/Card";
 import { useAppStore } from "@/stores/app-store";
 import { formatBytes, formatDate } from "@/utils/format";
-import { TrendingDown, TrendingUp } from "lucide-react";
 
 /** Reclaimable space per scan, one point per day. Inline SVG, no library. */
 export function ReclaimTrend() {

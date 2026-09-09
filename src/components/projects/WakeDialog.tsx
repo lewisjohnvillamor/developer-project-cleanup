@@ -1,8 +1,8 @@
+import { AlertTriangle, ArchiveRestore, Check, Loader2, Play, X, XCircle } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { Button } from "@/components/common/Button";
 import { Dialog } from "@/components/common/Dialog";
 import { useAppStore } from "@/stores/app-store";
-import { AlertTriangle, ArchiveRestore, Check, Loader2, Play, X, XCircle } from "lucide-react";
-import { useEffect, useRef } from "react";
 
 export function WakeDialog() {
   const w = useAppStore((s) => s.wake);

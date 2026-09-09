@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { BulkActionBar } from "@/components/projects/BulkActionBar";
 import { ProjectDetailsDrawer } from "@/components/projects/ProjectDetailsDrawer";
 import { ProjectTable } from "@/components/projects/ProjectTable";
@@ -5,7 +6,6 @@ import { ProjectToolbar } from "@/components/projects/ProjectToolbar";
 import { useProjectList } from "@/hooks/useProjectList";
 import { useAppStore } from "@/stores/app-store";
 import { formatBytes, pluralize } from "@/utils/format";
-import { useRef } from "react";
 
 export function ProjectsPage() {
   const visible = useProjectList();

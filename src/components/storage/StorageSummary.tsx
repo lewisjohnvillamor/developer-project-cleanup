@@ -1,7 +1,7 @@
-import { useAppStore } from "@/stores/app-store";
-import { formatBytes, formatPercent, splitBytes } from "@/utils/format";
 import { Database, FolderOpen, HardDrive, Percent } from "lucide-react";
 import type { ReactNode } from "react";
+import { useAppStore } from "@/stores/app-store";
+import { formatBytes, formatPercent, splitBytes } from "@/utils/format";
 
 function Stat({
   icon,
@@ -10,7 +10,14 @@ function Stat({
   label,
   emphasis,
   hint,
-}: { icon: ReactNode; value: string; unit?: string; label: string; emphasis?: boolean; hint?: string }) {
+}: {
+  icon: ReactNode;
+  value: string;
+  unit?: string;
+  label: string;
+  emphasis?: boolean;
+  hint?: string;
+}) {
   return (
     <div
       className={`flex flex-col gap-1 rounded-lg border bg-surface px-4 py-3.5 ${emphasis ? "border-accent/40 shadow-[inset_0_0_0_1px_var(--accent-soft)]" : "border-border"}`}

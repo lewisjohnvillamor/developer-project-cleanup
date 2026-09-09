@@ -1,3 +1,4 @@
+import { ArrowRight, FolderPlus, Moon, Search, ShieldCheck, Sparkles } from "lucide-react";
 import { StatusBadge } from "@/components/common/Badge";
 import { Button } from "@/components/common/Button";
 import { Card } from "@/components/common/Card";
@@ -9,7 +10,6 @@ import { StorageSummary } from "@/components/storage/StorageSummary";
 import { useAppStore } from "@/stores/app-store";
 import { bulkEligible, primaryLabel } from "@/utils/filters";
 import { formatBytes, formatRelative, pluralize } from "@/utils/format";
-import { ArrowRight, FolderPlus, Moon, Search, ShieldCheck, Sparkles } from "lucide-react";
 
 function Welcome() {
   const roots = useAppStore((s) => s.settings.scanRoots);

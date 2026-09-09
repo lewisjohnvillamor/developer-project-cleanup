@@ -1,12 +1,12 @@
+import { Check, CheckSquare, ChevronDown, Filter, Search, X } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/common/Button";
 import { Menu, TextInput, Toggle } from "@/components/common/Controls";
 import { useAppStore } from "@/stores/app-store";
 import type { Project, ProjectStatus, Stack } from "@/types";
 import { STACK_LABELS } from "@/types";
-import { EMPTY_FILTERS, type ProjectFilters, activeFilterCount, bulkEligible } from "@/utils/filters";
+import { activeFilterCount, bulkEligible, EMPTY_FILTERS, type ProjectFilters } from "@/utils/filters";
 import { daysSince } from "@/utils/format";
-import { Check, CheckSquare, ChevronDown, Filter, Search, X } from "lucide-react";
-import { useMemo, useState } from "react";
 
 const GB = 1_000_000_000;
 const MB = 1_000_000;

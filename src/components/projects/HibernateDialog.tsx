@@ -1,11 +1,11 @@
+import { AlertTriangle, Archive, Check, ChevronDown, ChevronRight, Loader2, ShieldCheck, X } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/common/Button";
 import { Checkbox, ProgressBar, Toggle } from "@/components/common/Controls";
 import { Dialog } from "@/components/common/Dialog";
 import { useAppStore } from "@/stores/app-store";
 import { describeOutcome, outcomeIsError } from "@/types";
 import { formatBytes, formatCount, pluralize } from "@/utils/format";
-import { AlertTriangle, Archive, Check, ChevronDown, ChevronRight, Loader2, ShieldCheck, X } from "lucide-react";
-import { useState } from "react";
 
 const DISPOSITION_TEXT = {
   trash: "Removed folders go to the Recycle Bin / Trash.",

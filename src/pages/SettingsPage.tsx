@@ -1,3 +1,5 @@
+import { ClipboardCopy, Download, Eraser, Folder, FolderPlus, Loader2, Plus, Search, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Badge, SafetyBadge } from "@/components/common/Badge";
 import { Button, IconButton } from "@/components/common/Button";
 import { Card } from "@/components/common/Card";
@@ -5,8 +7,6 @@ import { NumberInput, RadioGroup, Select, TextInput, Toggle } from "@/components
 import { useAppStore } from "@/stores/app-store";
 import { CATEGORY_LABELS, type CleanupRule, type Disposition, type RuleMatch, STACK_LABELS, type Stack, type Theme } from "@/types";
 import { formatBytes } from "@/utils/format";
-import { ClipboardCopy, Download, Eraser, Folder, FolderPlus, Loader2, Plus, Search, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
 
 const BUILTIN_RULES: { pattern: string; stacks: string; safety: "safe" | "review"; why: string }[] = [
   { pattern: "node_modules/", stacks: "Node", safety: "safe", why: "Installed packages generated from the lockfile." },
@@ -53,7 +53,13 @@ function ListEditor({
   placeholder,
   mono = true,
   validate,
-}: { items: string[]; onChange: (v: string[]) => void; placeholder: string; mono?: boolean; validate?: (v: string) => string | null }) {
+}: {
+  items: string[];
+  onChange: (v: string[]) => void;
+  placeholder: string;
+  mono?: boolean;
+  validate?: (v: string) => string | null;
+}) {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const add = () => {

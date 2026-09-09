@@ -6,7 +6,13 @@ export function Card({
   children,
   className = "",
   padded = true,
-}: { title?: ReactNode; action?: ReactNode; children: ReactNode; className?: string; padded?: boolean }) {
+}: {
+  title?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  padded?: boolean;
+}) {
   return (
     <section className={`rounded-lg border border-border bg-surface ${className}`}>
       {(title || action) && (

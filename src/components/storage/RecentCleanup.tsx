@@ -1,8 +1,8 @@
+import { ArrowRight, History } from "lucide-react";
 import { Button } from "@/components/common/Button";
 import { Card } from "@/components/common/Card";
 import { useAppStore } from "@/stores/app-store";
 import { formatBytes, formatDate, pluralize } from "@/utils/format";
-import { ArrowRight, History } from "lucide-react";
 
 export function RecentCleanup() {
   const history = useAppStore((s) => s.history);

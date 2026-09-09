@@ -1,6 +1,6 @@
-import type { Project } from "@/types";
 import { describe, expect, it } from "vitest";
-import { EMPTY_FILTERS, activeFilterCount, applyFilters, bulkEligible, isIgnored, primaryLabel, sortProjects } from "../filters";
+import type { Project } from "@/types";
+import { activeFilterCount, applyFilters, bulkEligible, EMPTY_FILTERS, isIgnored, primaryLabel, sortProjects } from "../filters";
 
 const NOW = Date.parse("2026-09-07T12:00:00Z");
 const ago = (days: number) => new Date(NOW - days * 86_400_000).toISOString();

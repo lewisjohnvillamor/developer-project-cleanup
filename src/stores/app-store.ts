@@ -1,3 +1,4 @@
+import { create } from "zustand";
 import { type Backend, getBackend } from "@/lib";
 import type {
   AppInfo,
@@ -19,7 +20,6 @@ import type {
 } from "@/types";
 import { DEFAULT_SETTINGS } from "@/types";
 import { EMPTY_FILTERS, type ProjectFilters, type SortDir, type SortKey } from "@/utils/filters";
-import { create } from "zustand";
 
 export type Page = "overview" | "projects" | "history" | "settings";
 
