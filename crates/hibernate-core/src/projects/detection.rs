@@ -26,15 +26,17 @@ pub fn read_dir_lite(dir: &Path) -> io::Result<Vec<DirEntryLite>> {
             Ok(e) => e,
             Err(_) => continue,
         };
-        let ft = match entry.file_type() {
-            Ok(ft) => ft,
+        let meta = match entry.metadata() {
+            Ok(m) => m,
             Err(_) => continue,
         };
+        let is_link = crate::fsx::is_link(&meta);
         out.push(DirEntryLite {
             name: entry.file_name().to_string_lossy().into_owned(),
-            is_dir: ft.is_dir(),
-            is_file: ft.is_file(),
-            is_symlink: ft.is_symlink(),
+            // A link that points at a directory is not a directory to walk.
+            is_dir: meta.is_dir() && !is_link,
+            is_file: meta.is_file() && !is_link,
+            is_symlink: is_link,
         });
     }
     Ok(out)

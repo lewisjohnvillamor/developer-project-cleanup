@@ -75,7 +75,7 @@ pub fn validate_artifact(
 
     let meta = std::fs::symlink_metadata(artifact)
         .map_err(|_| SafetyError::NotFound(artifact.to_path_buf()))?;
-    if meta.file_type().is_symlink() {
+    if crate::fsx::is_link(&meta) {
         return Err(SafetyError::IsSymlink(artifact.to_path_buf()));
     }
     if !meta.is_dir() {

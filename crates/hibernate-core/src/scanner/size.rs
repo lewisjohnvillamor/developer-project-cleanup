@@ -1,6 +1,7 @@
 //! Phase 2: measure one project, classifying artifact directories.
 
 use crate::cleanup::rules::{CleanupRule, RuleSet};
+use crate::fsx;
 use crate::model::{CleanupArtifact, Stack};
 use crate::scanner::cache::{fingerprint, SharedTreeCache};
 use crate::scanner::traversal::{is_default_ignored, is_user_ignored, MAX_DEPTH};
@@ -86,20 +87,20 @@ pub fn measure(
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
             let child = entry.path();
-            let ft = match entry.file_type() {
-                Ok(ft) => ft,
+            let meta = match entry.metadata() {
+                Ok(m) => m,
                 Err(_) => continue,
             };
 
             if at_root && opts.rules.is_protected(&name) {
-                m.protected_entries.push(if ft.is_dir() {
+                m.protected_entries.push(if meta.is_dir() {
                     format!("{name}/")
                 } else {
                     name.clone()
                 });
             }
 
-            if ft.is_symlink() {
+            if fsx::is_link(&meta) {
                 if opts.follow_symlinks
                     && !frame.generated
                     && fs::metadata(&child).map(|md| md.is_dir()).unwrap_or(false)
@@ -123,7 +124,7 @@ pub fn measure(
                 continue;
             }
 
-            if ft.is_dir() {
+            if fsx::is_real_dir(&meta) {
                 if opts.project_paths.contains(&child) {
                     continue; // a separate (nested) project
                 }

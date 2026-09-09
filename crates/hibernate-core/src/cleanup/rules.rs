@@ -628,8 +628,8 @@ pub fn preview_matches(
                 continue;
             };
             for entry in entries.flatten() {
-                let Ok(ft) = entry.file_type() else { continue };
-                if !ft.is_dir() || ft.is_symlink() {
+                let Ok(meta) = entry.metadata() else { continue };
+                if !crate::fsx::is_real_dir(&meta) {
                     continue;
                 }
                 let name = entry.file_name().to_string_lossy().into_owned();
