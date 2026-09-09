@@ -118,8 +118,10 @@ fn finish_run(ctx: &AppCtx, app: &AppHandle, entry: &HistoryEntry) {
         let mut history = AppCtx::lock(&ctx.history);
         history.push(entry.clone());
     }
-    let _ = ctx.save_state();
-    let _ = ctx.save_history();
+    // Both report their own failures to the window: a run that is not
+    // recorded cannot be restored, so it must not fail quietly.
+    ctx.save_state().ok();
+    ctx.save_history().ok();
 
     let mut changed: Vec<Project> = Vec::new();
     {
@@ -184,7 +186,7 @@ pub async fn restore_entry(
             let (restored, errors) = hib::restore_entry(entry, &quarantine);
             (restored, errors, entry.clone())
         };
-        let _ = ctx.save_history();
+        ctx.save_history().ok();
         let mut changed = Vec::new();
         {
             let mut state = AppCtx::lock(&ctx.state);
@@ -197,7 +199,7 @@ pub async fn restore_entry(
                 }
             }
         }
-        let _ = ctx.save_state();
+        ctx.save_state().ok();
         for p in &mut changed {
             ctx.refresh_status(p);
             let _ = ctx.with_project(&p.id.clone(), |cached| cached.status = p.status);

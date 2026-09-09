@@ -126,7 +126,7 @@ pub fn start_wake(
                         state.hibernations.remove(&path);
                         state.touch_activity(&path, Utc::now());
                     }
-                    let _ = ctx.save_state();
+                    ctx.save_state().ok();
                     let updated = ctx.with_project(&project_id, |p| {
                         p.hibernation = None;
                         p.activity.app_activity_at = Some(Utc::now());

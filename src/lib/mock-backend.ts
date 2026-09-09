@@ -3,6 +3,7 @@
 // every screen can be exercised without the Rust engine.
 
 import {
+  type AppError,
   type ArtifactCategory,
   type CleanupArtifact,
   DEFAULT_SETTINGS,
@@ -400,6 +401,7 @@ export function createMockBackend(): Backend {
   const hibEvents = new Emitter<HibernateEvent>();
   const wakeEvents = new Emitter<WakeEvent>();
   const updates = new Emitter<Project[]>();
+  const appErrors = new Emitter<AppError>();
 
   let settings: Settings = { ...DEFAULT_SETTINGS };
   let projects: Project[] = [];
@@ -432,11 +434,14 @@ export function createMockBackend(): Backend {
   } catch {
     /* ignore */
   }
+  // The mock's disk is localStorage, and it really can refuse a write: quota
+  // exceeded, or a browser with site data blocked. Report it the way the
+  // desktop app reports a failed write, so the UI takes the same path.
   const persist = () => {
     try {
       localStorage.setItem(LS_KEY, JSON.stringify({ settings, projects, summary, scannedAt, history, trend }));
-    } catch {
-      /* ignore */
+    } catch (err) {
+      appErrors.emit({ operation: "Saving to browser storage", path: LS_KEY, message: String(err) });
     }
   };
 
@@ -669,6 +674,7 @@ export function createMockBackend(): Backend {
       return { ...p };
     },
     onProjectsUpdated: async (h) => updates.on(h),
+    onAppError: async (h) => appErrors.on(h),
 
     async planHibernate(request) {
       return plan(request);

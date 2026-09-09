@@ -8,8 +8,12 @@ use hibernate_core::model::Project;
 use hibernate_core::scanner::activity;
 use hibernate_core::scanner::{ScanSummary, TreeCache};
 use serde::{Deserialize, Serialize};
+use std::io;
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use tauri::{AppHandle, Emitter};
 
 /// The last scan, kept in memory and on disk so the app opens with data.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -55,6 +59,20 @@ impl Job {
     }
 }
 
+/// A write to disk that did not happen. The app keeps running on its
+/// in-memory copy, but something it promised to remember is not on disk: the
+/// user has to know, because the next launch will disagree with the screen in
+/// front of them.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppError {
+    /// What the app was doing, phrased for a person.
+    pub operation: String,
+    /// The file it was writing.
+    pub path: PathBuf,
+    pub message: String,
+}
+
 pub struct AppCtx {
     pub paths: AppPaths,
     pub settings: Mutex<Settings>,
@@ -67,6 +85,9 @@ pub struct AppCtx {
     pub hibernate: Job,
     pub wake: Job,
     pub caches: Job,
+    /// Set once during Tauri setup so background threads can reach the window.
+    /// Unset in tests and before setup, where reporting falls back to the log.
+    app: OnceLock<AppHandle>,
 }
 
 impl AppCtx {
@@ -94,20 +115,56 @@ impl AppCtx {
             hibernate: Job::new(),
             wake: Job::new(),
             caches: Job::new(),
+            app: OnceLock::new(),
         }
     }
 
-    pub fn save_tree_cache(&self) {
-        let cache = Self::lock(&self.tree_cache);
-        if let Err(err) = cache.save(&self.paths.tree_cache_file) {
-            log::warn!("cannot save tree cache: {err}");
+    /// Give the context a handle to the window so failures can be shown.
+    pub fn attach(&self, app: AppHandle) {
+        let _ = self.app.set(app);
+    }
+
+    /// Report a failure the user would otherwise never see, and return its
+    /// message. Every write to disk goes through here instead of being
+    /// discarded at the call site: a cleanup the app forgets to record is a
+    /// cleanup the user cannot undo, and silence would make that look like
+    /// success.
+    fn report(&self, operation: &str, path: &Path, err: &io::Error) -> String {
+        let message = err.to_string();
+        log::error!("{operation} failed ({}): {message}", path.display());
+        if let Some(app) = self.app.get() {
+            // Nothing useful is left to do if the event itself cannot be
+            // delivered; the log line above is the fallback record.
+            let _ = app.emit(
+                "app-error",
+                AppError {
+                    operation: operation.to_string(),
+                    path: path.to_path_buf(),
+                    message: message.clone(),
+                },
+            );
         }
+        message
+    }
+
+    fn checked(&self, operation: &str, path: &Path, result: io::Result<()>) -> Result<(), String> {
+        result.map_err(|err| self.report(operation, path, &err))
+    }
+
+    /// The size cache is an optimisation, so a failure costs a slower next
+    /// scan and nothing else. It is still reported rather than dropped.
+    pub fn save_tree_cache(&self) {
+        let result = Self::lock(&self.tree_cache).save(&self.paths.tree_cache_file);
+        let _ = self.checked(
+            "Saving cached folder sizes",
+            &self.paths.tree_cache_file,
+            result,
+        );
     }
 
     pub fn save_trend(&self) {
-        if let Err(err) = Self::lock(&self.trend).save(&self.paths) {
-            log::warn!("cannot save scan trend: {err}");
-        }
+        let result = Self::lock(&self.trend).save(&self.paths);
+        let _ = self.checked("Saving scan history", &self.paths.scan_trend_file, result);
     }
 
     pub fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -127,28 +184,27 @@ impl AppCtx {
     }
 
     pub fn save_settings(&self) -> Result<(), String> {
-        Self::lock(&self.settings)
-            .save(&self.paths)
-            .map_err(|e| e.to_string())
+        let result = Self::lock(&self.settings).save(&self.paths);
+        self.checked("Saving settings", &self.paths.settings_file, result)
     }
 
+    /// Protected flags, hidden projects and hibernation records. Losing this
+    /// is the worst of the three: the app would forget that a project was
+    /// hibernated, and with it how to wake the project up.
     pub fn save_state(&self) -> Result<(), String> {
-        Self::lock(&self.state)
-            .save(&self.paths)
-            .map_err(|e| e.to_string())
+        let result = Self::lock(&self.state).save(&self.paths);
+        self.checked("Saving project state", &self.paths.state_file, result)
     }
 
     pub fn save_history(&self) -> Result<(), String> {
-        Self::lock(&self.history)
-            .save(&self.paths)
-            .map_err(|e| e.to_string())
+        let result = Self::lock(&self.history).save(&self.paths);
+        self.checked("Saving cleanup history", &self.paths.history_file, result)
     }
 
     pub fn save_snapshot(&self) {
         let snap = Self::lock(&self.snapshot).clone();
-        if let Err(err) = save_json(&self.paths.last_scan_file, &snap) {
-            log::warn!("cannot save last scan: {err}");
-        }
+        let result = save_json(&self.paths.last_scan_file, &snap);
+        let _ = self.checked("Saving the last scan", &self.paths.last_scan_file, result);
     }
 
     /// Re-derive a cached project's status after its persisted state changed.
@@ -177,5 +233,64 @@ impl AppCtx {
             .find(|p| p.id == id)
             .ok_or_else(|| "Project is not part of the last scan. Scan again.".to_string())?;
         Ok(f(project))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ctx_with_paths(paths: AppPaths) -> AppCtx {
+        AppCtx {
+            paths,
+            settings: Mutex::new(Settings::default()),
+            state: Mutex::new(AppState::default()),
+            history: Mutex::new(HistoryStore::default()),
+            snapshot: Mutex::new(ScanSnapshot::default()),
+            tree_cache: Arc::new(Mutex::new(TreeCache::default())),
+            trend: Mutex::new(ScanTrend::default()),
+            scan: Job::new(),
+            hibernate: Job::new(),
+            wake: Job::new(),
+            caches: Job::new(),
+            app: OnceLock::new(),
+        }
+    }
+
+    /// A write that cannot happen must come back as an error. The app keeps
+    /// working from memory either way, so a silent failure looks exactly like
+    /// success until the next launch contradicts it — and by then the record
+    /// of what was removed, and how to restore it, is gone.
+    #[test]
+    fn a_write_that_fails_is_reported_rather_than_swallowed() {
+        let tmp = tempfile::tempdir().unwrap();
+        // A regular file where the data directory should be, so every write
+        // beneath it fails the way a full or read-only disk would.
+        let blocked = tmp.path().join("data");
+        std::fs::write(&blocked, b"not a directory").unwrap();
+        let ctx = ctx_with_paths(AppPaths::in_dir(&blocked));
+
+        for (what, result) in [
+            ("settings", ctx.save_settings()),
+            ("project state", ctx.save_state()),
+            ("cleanup history", ctx.save_history()),
+        ] {
+            let err = result.expect_err("saving into a file must fail");
+            assert!(!err.is_empty(), "{what} failed without saying why");
+        }
+    }
+
+    /// The same write succeeds when the directory is real, so the test above
+    /// is failing for the reason it claims.
+    #[test]
+    fn a_write_that_can_happen_succeeds() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = AppPaths::in_dir(tmp.path());
+        paths.ensure().unwrap();
+        let ctx = ctx_with_paths(paths);
+        ctx.save_settings().unwrap();
+        ctx.save_state().unwrap();
+        ctx.save_history().unwrap();
+        assert!(ctx.paths.history_file.exists());
     }
 }

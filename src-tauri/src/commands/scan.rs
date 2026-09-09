@@ -29,7 +29,7 @@ pub fn run_scan_blocking(
         let state = AppCtx::lock(&ctx.state).clone();
         (opts, state, incremental)
     };
-    let _ = ctx.save_settings();
+    ctx.save_settings().ok();
     if full {
         AppCtx::lock(&ctx.tree_cache).clear();
     }

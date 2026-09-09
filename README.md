@@ -140,6 +140,26 @@ Files are never removed by rules, only whole directories that a rule named.
 The engine's tests cover each of these refusals, including the case where a
 scan result has been tampered with to point at `src/`.
 
+### Receipts
+
+The refusals above are tested one by one, but the promise is about the whole
+run, so one test makes the whole claim:
+[`nothing_outside_is_touched.rs`](crates/hibernate-core/tests/nothing_outside_is_touched.rs)
+records every file, byte and symlink target under a fixture — including a
+`vault/` outside the scan folders, reached by a symlink planted inside
+`node_modules/` — runs a real permanent cleanup, records the tree again, and
+fails if *anything* changed that the plan did not name. Source files,
+`.env`, a SQLite database, migrations, a committed `dist/` and the vault all
+have to come back byte-for-byte identical.
+
+### When a write fails
+
+The app keeps its own record of what it removed and how to restore it. If a
+write to that record fails — a full disk, a read-only data directory — it
+says so in the window rather than carrying on from memory, because a
+cleanup the app forgets is a cleanup you cannot undo. The same failures go
+to a log file; **Settings → Copy diagnostics** prints its location.
+
 ## Layout
 
 ```

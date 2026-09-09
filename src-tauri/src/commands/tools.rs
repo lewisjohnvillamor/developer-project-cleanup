@@ -7,7 +7,7 @@ use hibernate_core::format;
 use hibernate_core::model::Stack;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 /// Sizes of global toolchain caches. Read-only; can take a while on big
 /// machines, so it runs off the main thread.
@@ -97,14 +97,14 @@ pub async fn purge_quarantine_batch(
             }
         }
     }
-    let _ = ctx2.save_history();
+    ctx2.save_history().ok();
     Ok(bytes)
 }
 
 /// Plain-text bug-report material: version, platform, settings and the last
 /// scan's warnings. No file contents, no project names beyond counts.
 #[tauri::command]
-pub fn get_diagnostics(ctx: State<'_, Arc<AppCtx>>) -> String {
+pub fn get_diagnostics(app: AppHandle, ctx: State<'_, Arc<AppCtx>>) -> String {
     let settings = AppCtx::lock(&ctx.settings).clone();
     let snap = AppCtx::lock(&ctx.snapshot).clone();
     let history = AppCtx::lock(&ctx.history).clone();
@@ -123,6 +123,11 @@ pub fn get_diagnostics(ctx: State<'_, Arc<AppCtx>>) -> String {
         hibernate_core::git::git_available()
     ));
     out.push_str(&format!("data dir: {}\n", ctx.paths.data_dir.display()));
+    // Where the log file the user should attach actually lives.
+    match app.path().app_log_dir() {
+        Ok(dir) => out.push_str(&format!("log dir: {}\n", dir.display())),
+        Err(err) => out.push_str(&format!("log dir: unavailable ({err})\n")),
+    }
     out.push_str(&format!(
         "tree cache entries: {}\n",
         AppCtx::lock(&ctx.tree_cache).len()
