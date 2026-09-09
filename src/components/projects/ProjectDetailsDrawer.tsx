@@ -244,6 +244,18 @@ export function ProjectDetailsDrawer() {
                         </span>
                         <span>Restore</span>
                         <span className="font-mono text-[11.5px] text-fg selectable">{a.restoreHint ?? "Regenerated automatically by the toolchain"}</span>
+                        {a.trackedByGit && (
+                          <>
+                            <span>Git</span>
+                            <span className="text-danger">Tracked by Git, so this folder is kept whatever its name suggests.</span>
+                          </>
+                        )}
+                        {a.ignoredByGit && !a.trackedByGit && (
+                          <>
+                            <span>Git</span>
+                            <span className="text-safe">Ignored by this repository, which confirms it is generated.</span>
+                          </>
+                        )}
                         {a.safety === "review" && (
                           <>
                             <span>Note</span>

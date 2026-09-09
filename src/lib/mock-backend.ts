@@ -141,6 +141,8 @@ function artifactsFor(stack: Stack, size: number, r: () => number, path: string,
     regeneratable: true,
     explanation,
     restoreHint,
+    trackedByGit: false,
+    ignoredByGit: safety === "safe",
   });
   const out: CleanupArtifact[] = [];
   switch (stack) {

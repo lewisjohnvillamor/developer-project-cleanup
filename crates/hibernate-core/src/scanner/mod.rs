@@ -401,7 +401,40 @@ fn build_project(
         cancel,
     );
     let scan_duration_ms = started.elapsed().as_millis() as u64;
-    let mut warnings = m.warnings;
+    let mut m = m;
+
+    let git_info = git::inspect(&d.path, git_ok);
+
+    // A rule matches on a directory's name, which says nothing about whether
+    // the project actually treats it as generated. Ask Git: anything it
+    // tracks holds committed or staged work and is never offered for removal,
+    // however well the name matches.
+    if git_ok && git_info.is_repo {
+        let dirs: Vec<String> = m
+            .artifacts
+            .iter()
+            .map(|a| a.relative_path.clone())
+            .collect();
+        if let Some(facts) = git::artifact_facts(&d.path, &dirs) {
+            for artifact in &mut m.artifacts {
+                let key = artifact.relative_path.trim_end_matches('/');
+                artifact.ignored_by_git = facts.ignored.contains(key);
+                if facts.tracked.contains(key) {
+                    artifact.tracked_by_git = true;
+                    artifact.safety = Safety::Protected;
+                    artifact.regeneratable = false;
+                    artifact.explanation = format!(
+                        "Git tracks files inside this folder, so it holds committed or staged work. {} is not applied here.",
+                        artifact.kind
+                    );
+                    artifact.restore_hint = None;
+                }
+            }
+        }
+    }
+    let m = m;
+
+    let mut warnings = m.warnings.clone();
     if scan_duration_ms > SLOW_PROJECT_SECS * 1000 {
         warnings.push(format!(
             "Measuring took {:.0}s. Consider excluding this folder or its largest sub-folders if it is not a project you care about.",
@@ -409,7 +442,6 @@ fn build_project(
         ));
     }
 
-    let git_info = git::inspect(&d.path, git_ok);
     let activity = ActivitySources {
         source_modified_at: m
             .source_modified_at

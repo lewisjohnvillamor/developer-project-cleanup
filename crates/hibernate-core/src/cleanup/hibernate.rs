@@ -573,6 +573,92 @@ mod tests {
         assert!(!entry.restorable());
     }
 
+    /// A folder whose name matches a rule but that the project commits is
+    /// real work. It must never reach a plan, however well the name matches.
+    #[test]
+    fn committed_build_output_is_never_planned() {
+        if !crate::git::git_available() {
+            return;
+        }
+        let tmp = tempdir().unwrap();
+        let root = tmp.path().join("Projects");
+        let proj = root.join("site");
+        write(&proj.join("package.json"), 10);
+        write(&proj.join("src/index.ts"), 10);
+        // This project commits its built output, as some do.
+        write(&proj.join("dist/bundle.js"), 4000);
+        // And ignores its dependencies, as almost all do.
+        std::fs::write(proj.join(".gitignore"), "node_modules/\n").unwrap();
+        write(&proj.join("node_modules/a/b.js"), 5000);
+
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(&proj)
+                .args(args)
+                .env("GIT_AUTHOR_NAME", "T")
+                .env("GIT_AUTHOR_EMAIL", "t@e")
+                .env("GIT_COMMITTER_NAME", "T")
+                .env("GIT_COMMITTER_EMAIL", "t@e")
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .unwrap();
+        };
+        git(&["init", "-q"]);
+        git(&["add", "-A"]);
+        git(&["commit", "-qm", "init"]);
+
+        let roots = vec![root];
+        let result = scan(
+            &roots,
+            &ScanOptions::default(),
+            &AppState::default(),
+            &AtomicBool::new(false),
+            &|_| {},
+        );
+        let project = result.projects.iter().find(|p| p.name == "site").unwrap();
+
+        let dist = project
+            .artifacts
+            .iter()
+            .find(|a| a.relative_path == "dist/")
+            .expect("dist/ still matches a rule");
+        assert!(dist.tracked_by_git, "Git tracks dist/");
+        assert_eq!(
+            dist.safety,
+            Safety::Protected,
+            "tracked output is never removable"
+        );
+        assert!(!dist.regeneratable);
+
+        let nm = project
+            .artifacts
+            .iter()
+            .find(|a| a.relative_path == "node_modules/")
+            .expect("node_modules/ found");
+        assert!(!nm.tracked_by_git);
+        assert!(nm.ignored_by_git, "the repository ignores node_modules/");
+        assert_eq!(nm.safety, Safety::Safe);
+
+        // The plan offers the dependencies and leaves the committed output alone.
+        let req = HibernateRequest {
+            selection: vec![SelectedProject {
+                project_id: project.id.clone(),
+                artifact_paths: None,
+            }],
+            include_review: true,
+        };
+        let plan = plan(&result.projects, &req, Disposition::Permanent);
+        let planned: Vec<&str> = plan.projects[0]
+            .artifacts
+            .iter()
+            .map(|a| a.relative_path.as_str())
+            .collect();
+        assert_eq!(planned, vec!["node_modules/"]);
+        assert_eq!(plan.total_bytes, 5000);
+    }
+
     #[test]
     fn stale_scan_results_are_skipped_not_deleted() {
         let (_tmp, mut projects, roots) = fixture();

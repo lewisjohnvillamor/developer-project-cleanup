@@ -160,6 +160,8 @@ pub fn measure(
                             regeneratable: rule.regeneratable,
                             explanation: rule.explanation.clone(),
                             restore_hint: restore_hint(rule),
+                            tracked_by_git: false,
+                            ignored_by_git: false,
                         });
                         continue;
                     }
