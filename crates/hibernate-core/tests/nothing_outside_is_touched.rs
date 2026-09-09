@@ -95,6 +95,12 @@ fn git(repo: &Path, args: &[&str]) {
 fn a_real_cleanup_touches_nothing_it_was_not_shown() {
     let tmp = tempfile::tempdir().unwrap();
     let fixture = tmp.path();
+    // The scanner canonicalises its roots, so the paths it hands back are
+    // spelled differently from the ones this test builds: on macOS a temp dir
+    // lives under `/var`, a symlink to `/private/var`, and on Windows
+    // canonicalisation yields a `\\?\` verbatim path. Keep both spellings so
+    // engine paths can be related to fixture paths.
+    let canonical_fixture = fs::canonicalize(fixture).unwrap();
 
     // ---- somewhere precious, outside the scan root entirely ---------------
     let vault = fixture.join("vault");
@@ -211,8 +217,11 @@ fn a_real_cleanup_touches_nothing_it_was_not_shown() {
         .flat_map(|p| p.artifacts.iter())
         .map(|a| {
             a.path
-                .strip_prefix(fixture)
-                .unwrap()
+                .strip_prefix(&canonical_fixture)
+                .or_else(|_| a.path.strip_prefix(fixture))
+                .unwrap_or_else(|_| {
+                    panic!("planned artifact outside the fixture: {}", a.path.display())
+                })
                 .to_string_lossy()
                 .replace('\\', "/")
         })
