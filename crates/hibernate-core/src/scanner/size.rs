@@ -39,9 +39,13 @@ pub struct MeasureOptions<'a> {
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct TreeSize {
+    /// Bytes on disk that removing this tree would actually free.
     pub bytes: u64,
     pub files: u64,
     pub dirs: u64,
+    /// Bytes inside this tree that are hard-linked to something outside it,
+    /// so they survive its removal. pnpm's shared store is the usual reason.
+    pub shared_elsewhere: u64,
 }
 
 struct Frame {
@@ -117,9 +121,7 @@ pub fn measure(
                     });
                     continue;
                 }
-                if let Ok(md) = fs::symlink_metadata(&child) {
-                    m.total_bytes += md.len();
-                }
+                m.total_bytes += fsx::allocated_size(&meta);
                 m.file_count += 1;
                 continue;
             }
@@ -175,9 +177,10 @@ pub fn measure(
                 continue;
             }
 
-            // Regular file.
-            if let Ok(md) = entry.metadata() {
-                m.total_bytes += md.len();
+            // Regular file. Count what it occupies on disk, not its length.
+            {
+                let md = &meta;
+                m.total_bytes += fsx::allocated_size(md);
                 m.file_count += 1;
                 if !frame.generated {
                     if let Ok(modified) = md.modified() {
@@ -232,8 +235,10 @@ pub fn measure_tree(root: &Path, cancel: &AtomicBool) -> TreeSize {
         bytes: 0,
         files: 0,
         dirs: 1,
+        shared_elsewhere: 0,
     };
     let mut stack = vec![root.to_path_buf()];
+    let mut links = fsx::LinkAccounting::new();
     let mut ops: u64 = 0;
     while let Some(dir) = stack.pop() {
         ops += 1;
@@ -244,18 +249,20 @@ pub fn measure_tree(root: &Path, cancel: &AtomicBool) -> TreeSize {
             continue;
         };
         for entry in entries.flatten() {
-            let Ok(ft) = entry.file_type() else { continue };
-            if ft.is_dir() {
+            let Ok(md) = entry.metadata() else { continue };
+            if fsx::is_real_dir(&md) {
                 size.dirs += 1;
                 stack.push(entry.path());
             } else {
                 size.files += 1;
-                if let Ok(md) = entry.metadata() {
-                    size.bytes += md.len();
-                }
+                // Shared files are held back until we know whether every
+                // link to them lives inside this tree.
+                size.bytes += links.observe(&md);
             }
         }
     }
+    size.bytes += links.shared_bytes_freed();
+    size.shared_elsewhere = links.shared_bytes_elsewhere();
     size
 }
 
@@ -276,6 +283,21 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
+
+    /// Sizes are now bytes *on disk*, so a file occupies whole blocks.
+    /// Assert the content is accounted for, within one block per file.
+    #[track_caller]
+    fn assert_on_disk(actual: u64, content: u64, files: u64) {
+        assert!(
+            actual >= content,
+            "on-disk size {actual} is below the {content} bytes of content"
+        );
+        let ceiling = content + (files + 1) * 4096;
+        assert!(
+            actual <= ceiling,
+            "on-disk size {actual} exceeds {content} bytes of content plus block slack ({ceiling})"
+        );
+    }
 
     fn write(path: &Path, bytes: usize) {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -314,24 +336,25 @@ mod tests {
             &opts,
             &AtomicBool::new(false),
         );
-        assert_eq!(
+        assert_on_disk(
             m.total_bytes,
-            100 + 200 + 5000 + 3000 + 1000 + 700 + 10 + 400 + 50
+            100 + 200 + 5000 + 3000 + 1000 + 700 + 10 + 400 + 50,
+            m.file_count,
         );
         assert_eq!(m.file_count, 9);
-        let kinds: Vec<(String, u64)> = m
+        let kinds: Vec<String> = m
             .artifacts
             .iter()
-            .map(|a| (a.relative_path.clone(), a.bytes))
+            .map(|a| a.relative_path.clone())
             .collect();
         assert_eq!(
             kinds,
-            vec![
-                ("node_modules/".to_string(), 8000),
-                (".next/".to_string(), 1000),
-                ("apps/docs/.next/".to_string(), 400),
-            ]
+            vec!["node_modules/", ".next/", "apps/docs/.next/"],
+            "largest artifact first"
         );
+        assert_on_disk(m.artifacts[0].bytes, 8000, 2);
+        assert_on_disk(m.artifacts[1].bytes, 1000, 1);
+        assert_on_disk(m.artifacts[2].bytes, 400, 1);
         assert_eq!(m.artifacts[0].file_count, 2);
         assert_eq!(m.artifacts[0].dir_count, 3);
         assert_eq!(
@@ -365,9 +388,80 @@ mod tests {
             &opts,
             &AtomicBool::new(false),
         );
-        assert_eq!(m.total_bytes, 910);
+        assert_on_disk(m.total_bytes, 910, m.file_count);
         assert_eq!(m.artifacts.len(), 1);
         assert_eq!(m.artifacts[0].kind, "rust-target");
+    }
+
+    /// Sizes must describe what removal frees, not what the files claim.
+    /// `node_modules` is thousands of tiny files that each occupy a whole
+    /// block, so lengths understate it; sparse files and pnpm's hard-linked
+    /// store make lengths overstate it.
+    #[cfg(unix)]
+    #[test]
+    fn measures_what_removal_would_actually_free() {
+        let tmp = tempdir().unwrap();
+        let store = tmp.path().join("store");
+        let nm = tmp.path().join("node_modules");
+        fs::create_dir_all(&store).unwrap();
+        fs::create_dir_all(nm.join("pkg")).unwrap();
+
+        // Shared with a store outside the tree: removing node_modules frees
+        // nothing for it, because the store still links to the same bytes.
+        let shared = store.join("blob.bin");
+        fs::write(&shared, vec![b'x'; 100_000]).unwrap();
+        fs::hard_link(&shared, nm.join("pkg/blob.bin")).unwrap();
+
+        // A tiny file still occupies a whole block.
+        fs::write(nm.join("pkg/small.bin"), vec![b'x'; 10]).unwrap();
+
+        let size = measure_tree(&nm, &AtomicBool::new(false));
+
+        assert_eq!(size.files, 2);
+        assert!(
+            size.shared_elsewhere >= 100_000,
+            "the hard-linked blob is shared outside the tree, got {}",
+            size.shared_elsewhere
+        );
+        assert!(
+            size.bytes < 100_000,
+            "bytes must exclude content that survives removal, got {}",
+            size.bytes
+        );
+        assert!(
+            size.bytes > 10,
+            "a 10-byte file still occupies a block, got {}",
+            size.bytes
+        );
+
+        // Once the outside link goes, the bytes really would be freed.
+        fs::remove_file(&shared).unwrap();
+        let after = measure_tree(&nm, &AtomicBool::new(false));
+        assert_eq!(after.shared_elsewhere, 0);
+        assert!(
+            after.bytes >= 100_000,
+            "with no outside link the blob counts, got {}",
+            after.bytes
+        );
+    }
+
+    /// A sparse file reports a length it does not occupy.
+    #[cfg(unix)]
+    #[test]
+    fn sparse_files_are_not_counted_as_their_length() {
+        let tmp = tempdir().unwrap();
+        let dir = tmp.path().join("target");
+        fs::create_dir_all(&dir).unwrap();
+        let f = fs::File::create(dir.join("sparse.bin")).unwrap();
+        f.set_len(64 * 1024 * 1024).unwrap();
+        drop(f);
+
+        let size = measure_tree(&dir, &AtomicBool::new(false));
+        assert!(
+            size.bytes < 1024 * 1024,
+            "a sparse file occupies almost nothing, got {}",
+            size.bytes
+        );
     }
 
     #[test]
@@ -419,7 +513,10 @@ mod tests {
             &AtomicBool::new(false),
         );
         assert_eq!(third.cache_hits, 0);
-        assert_eq!(third.artifacts[0].bytes, first.artifacts[0].bytes + 5000);
+        assert!(
+            third.artifacts[0].bytes > first.artifacts[0].bytes,
+            "the added file grows the measured size"
+        );
     }
 
     #[test]

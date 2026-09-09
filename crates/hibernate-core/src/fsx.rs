@@ -22,18 +22,16 @@ use std::path::Path;
 
 /// True when the entry is a link to somewhere else and must not be followed:
 /// a symbolic link on any platform, or any reparse point on Windows.
+#[cfg(windows)]
 pub fn is_link(meta: &Metadata) -> bool {
-    if meta.file_type().is_symlink() {
-        return true;
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::MetadataExt;
-        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
-        return meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0;
-    }
-    #[cfg(not(windows))]
-    false
+    use std::os::windows::fs::MetadataExt;
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+    meta.file_type().is_symlink() || meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(not(windows))]
+pub fn is_link(meta: &Metadata) -> bool {
+    meta.file_type().is_symlink()
 }
 
 /// True when the entry is a directory we may safely descend into: a real
@@ -137,5 +135,132 @@ mod tests {
             target.join("important.txt").exists(),
             "removing the junction must leave the target's contents alone"
         );
+    }
+}
+
+/// Bytes this file actually occupies on disk, which is what removing it
+/// frees. This is not its length:
+///
+/// * `node_modules` is mostly tiny files, and a 200-byte file still consumes
+///   a whole block, so the length *understates* the real cost;
+/// * a sparse file reports a length it does not occupy, so the length
+///   *overstates* it, sometimes by orders of magnitude;
+/// * filesystem compression means the same again.
+///
+/// Unix reports allocated blocks directly. Windows has no equivalent in
+/// `std` (`GetCompressedFileSize` would need a bindings crate), so the
+/// length is used there and the number is approximate for compressed or
+/// sparse files.
+#[cfg(unix)]
+pub fn allocated_size(meta: &Metadata) -> u64 {
+    use std::os::unix::fs::MetadataExt;
+    // `blocks()` is always in 512-byte units, whatever the block size.
+    meta.blocks() * 512
+}
+
+#[cfg(not(unix))]
+pub fn allocated_size(meta: &Metadata) -> u64 {
+    meta.len()
+}
+
+/// How many directory entries point at this file's contents. More than one
+/// means the bytes are shared, so removing this copy may free nothing.
+/// Returns `None` where the platform does not expose it through `std`.
+#[cfg(unix)]
+pub fn link_count(meta: &Metadata) -> Option<u64> {
+    use std::os::unix::fs::MetadataExt;
+    Some(meta.nlink())
+}
+
+#[cfg(not(unix))]
+pub fn link_count(_meta: &Metadata) -> Option<u64> {
+    None
+}
+
+/// Identity of a file's contents, so the same bytes reached through several
+/// hard links are recognised as one thing.
+#[cfg(unix)]
+pub fn content_id(meta: &Metadata) -> Option<(u64, u64)> {
+    use std::os::unix::fs::MetadataExt;
+    Some((meta.dev(), meta.ino()))
+}
+
+#[cfg(not(unix))]
+pub fn content_id(_meta: &Metadata) -> Option<(u64, u64)> {
+    None
+}
+
+/// Accounts for hard-linked files while measuring one tree.
+///
+/// Package managers that share a store — pnpm most visibly — hard-link the
+/// same bytes into many projects. Counting such a file once per link would
+/// overstate a tree, and counting it at all overstates what deleting the
+/// tree frees, because the bytes survive as long as a link outside the tree
+/// remains.
+///
+/// So: a file with one link counts immediately. A file with several is held
+/// back, and at the end its bytes count only if every one of its links was
+/// found inside this tree. Only multiply-linked files are remembered, which
+/// keeps the bookkeeping proportional to how much sharing there is rather
+/// than to the size of the tree.
+#[derive(Debug, Default)]
+pub struct LinkAccounting {
+    shared: std::collections::HashMap<(u64, u64), SharedFile>,
+}
+
+#[derive(Debug)]
+struct SharedFile {
+    bytes: u64,
+    links: u64,
+    seen: u64,
+}
+
+impl LinkAccounting {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Record a file. Returns the bytes to count immediately; shared files
+    /// return 0 here and are resolved by [`Self::shared_bytes_freed`].
+    pub fn observe(&mut self, meta: &Metadata) -> u64 {
+        let bytes = allocated_size(meta);
+        let links = link_count(meta).unwrap_or(1);
+        if links <= 1 {
+            return bytes;
+        }
+        let Some(id) = content_id(meta) else {
+            return bytes;
+        };
+        let entry = self.shared.entry(id).or_insert(SharedFile {
+            bytes,
+            links,
+            seen: 0,
+        });
+        entry.seen += 1;
+        0
+    }
+
+    /// Bytes from shared files that removing this tree would actually free:
+    /// those whose every link lives inside it.
+    pub fn shared_bytes_freed(&self) -> u64 {
+        self.shared
+            .values()
+            .filter(|f| f.seen >= f.links)
+            .map(|f| f.bytes)
+            .sum()
+    }
+
+    /// Bytes that look like they belong to this tree but are shared with
+    /// something outside it, so removing the tree does not free them.
+    pub fn shared_bytes_elsewhere(&self) -> u64 {
+        self.shared
+            .values()
+            .filter(|f| f.seen < f.links)
+            .map(|f| f.bytes)
+            .sum()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.shared.is_empty()
     }
 }

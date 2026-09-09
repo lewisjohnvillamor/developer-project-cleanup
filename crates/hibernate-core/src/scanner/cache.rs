@@ -22,12 +22,18 @@ pub struct CachedTree {
     pub bytes: u64,
     pub files: u64,
     pub dirs: u64,
+    #[serde(default)]
+    pub shared_elsewhere: u64,
     pub measured_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct TreeCache {
+    /// Bumped whenever the meaning of a cached size changes, so entries
+    /// written by an older build are discarded rather than misreported.
+    #[serde(default)]
+    pub version: u32,
     pub entries: HashMap<PathBuf, CachedTree>,
     #[serde(skip)]
     touched: HashSet<PathBuf>,
@@ -35,6 +41,18 @@ pub struct TreeCache {
     pub hits: usize,
     #[serde(skip)]
     pub misses: usize,
+}
+
+impl Default for TreeCache {
+    fn default() -> Self {
+        TreeCache {
+            version: Self::VERSION,
+            entries: HashMap::new(),
+            touched: HashSet::new(),
+            hits: 0,
+            misses: 0,
+        }
+    }
 }
 
 /// Entries older than this are re-measured regardless of fingerprint.
@@ -48,8 +66,17 @@ const MIN_FILES_TO_CACHE: u64 = 200;
 const MAX_CHILD_DIRS: usize = 4000;
 
 impl TreeCache {
+    /// Current meaning of a cached size. 1: file lengths. 2: bytes on disk
+    /// that removal would free, excluding content hard-linked elsewhere.
+    pub const VERSION: u32 = 2;
+
     pub fn load(path: &Path) -> Self {
-        load_json(path)
+        let mut cache: Self = load_json(path);
+        if cache.version != Self::VERSION {
+            cache.entries.clear();
+            cache.version = Self::VERSION;
+        }
+        cache
     }
 
     pub fn save(&self, path: &Path) -> io::Result<()> {
@@ -69,6 +96,7 @@ impl TreeCache {
             bytes: entry.bytes,
             files: entry.files,
             dirs: entry.dirs,
+            shared_elsewhere: entry.shared_elsewhere,
         })
     }
 
@@ -84,6 +112,7 @@ impl TreeCache {
                 bytes: size.bytes,
                 files: size.files,
                 dirs: size.dirs,
+                shared_elsewhere: size.shared_elsewhere,
                 measured_at: now,
             },
         );
@@ -104,6 +133,7 @@ impl TreeCache {
     pub fn clear(&mut self) {
         self.entries.clear();
         self.touched.clear();
+        self.version = Self::VERSION;
     }
 
     pub fn len(&self) -> usize {
@@ -264,6 +294,7 @@ mod tests {
             bytes: 100,
             files: 500,
             dirs: 10,
+            shared_elsewhere: 0,
         };
         assert!(cache.get(p, 1, now).is_none());
         cache.insert(p, 1, size, now);
@@ -280,6 +311,7 @@ mod tests {
                 bytes: 1,
                 files: 3,
                 dirs: 1,
+                shared_elsewhere: 0,
             },
             now,
         );
@@ -306,6 +338,7 @@ mod tests {
                 bytes: 9,
                 files: 900,
                 dirs: 3,
+                shared_elsewhere: 0,
             },
             Utc::now(),
         );
