@@ -16,6 +16,7 @@ mod testing;
 
 use state::AppCtx;
 use std::sync::Arc;
+use tauri::Emitter;
 
 pub fn run() {
     let ctx = Arc::new(AppCtx::load());
@@ -29,7 +30,12 @@ pub fn run() {
         .manage(ctx.clone())
         .setup(move |app| {
             // Let background threads report failed writes to the window.
-            ctx.attach(app.handle().clone());
+            let window = app.handle().clone();
+            ctx.on_error(move |err| {
+                // Nothing useful is left to do if the event itself cannot be
+                // delivered; `report` has already written the log line.
+                let _ = window.emit("app-error", err);
+            });
             // Expire old quarantine batches in the background.
             let purge_ctx = ctx.clone();
             std::thread::spawn(move || purge_ctx.purge_quarantine());

@@ -13,7 +13,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
-use tauri::{AppHandle, Emitter};
 
 /// The last scan, kept in memory and on disk so the app opens with data.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -73,6 +72,12 @@ pub struct AppError {
     pub message: String,
 }
 
+/// How a failed write reaches the user. The window is one way, but this
+/// deliberately does not name it: reaching for `AppHandle` here would make
+/// Tauri's runtime reachable from the unit tests, and on Windows that turns
+/// this crate's test binary into one the loader refuses to start.
+type ErrorReporter = Box<dyn Fn(&AppError) + Send + Sync>;
+
 pub struct AppCtx {
     pub paths: AppPaths,
     pub settings: Mutex<Settings>,
@@ -85,9 +90,9 @@ pub struct AppCtx {
     pub hibernate: Job,
     pub wake: Job,
     pub caches: Job,
-    /// Set once during Tauri setup so background threads can reach the window.
-    /// Unset in tests and before setup, where reporting falls back to the log.
-    app: OnceLock<AppHandle>,
+    /// Installed once during Tauri setup so background threads can reach the
+    /// window. Unset before setup, where reporting falls back to the log.
+    reporter: OnceLock<ErrorReporter>,
 }
 
 impl AppCtx {
@@ -115,13 +120,13 @@ impl AppCtx {
             hibernate: Job::new(),
             wake: Job::new(),
             caches: Job::new(),
-            app: OnceLock::new(),
+            reporter: OnceLock::new(),
         }
     }
 
-    /// Give the context a handle to the window so failures can be shown.
-    pub fn attach(&self, app: AppHandle) {
-        let _ = self.app.set(app);
+    /// Say where failures should be shown. Called once during setup.
+    pub fn on_error(&self, report: impl Fn(&AppError) + Send + Sync + 'static) {
+        let _ = self.reporter.set(Box::new(report));
     }
 
     /// Report a failure the user would otherwise never see, and return its
@@ -132,17 +137,12 @@ impl AppCtx {
     fn report(&self, operation: &str, path: &Path, err: &io::Error) -> String {
         let message = err.to_string();
         log::error!("{operation} failed ({}): {message}", path.display());
-        if let Some(app) = self.app.get() {
-            // Nothing useful is left to do if the event itself cannot be
-            // delivered; the log line above is the fallback record.
-            let _ = app.emit(
-                "app-error",
-                AppError {
-                    operation: operation.to_string(),
-                    path: path.to_path_buf(),
-                    message: message.clone(),
-                },
-            );
+        if let Some(report) = self.reporter.get() {
+            report(&AppError {
+                operation: operation.to_string(),
+                path: path.to_path_buf(),
+                message: message.clone(),
+            });
         }
         message
     }
@@ -254,7 +254,7 @@ mod tests {
             hibernate: Job::new(),
             wake: Job::new(),
             caches: Job::new(),
-            app: OnceLock::new(),
+            reporter: OnceLock::new(),
         }
     }
 
@@ -271,6 +271,15 @@ mod tests {
         std::fs::write(&blocked, b"not a directory").unwrap();
         let ctx = ctx_with_paths(AppPaths::in_dir(&blocked));
 
+        // Every failure must also reach whoever is listening, not just the
+        // caller: the saves with nothing to return to are the ones that
+        // matter most.
+        let seen: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let recorder = seen.clone();
+        ctx.on_error(move |err| {
+            AppCtx::lock(&recorder).push(err.operation.clone());
+        });
+
         for (what, result) in [
             ("settings", ctx.save_settings()),
             ("project state", ctx.save_state()),
@@ -279,6 +288,24 @@ mod tests {
             let err = result.expect_err("saving into a file must fail");
             assert!(!err.is_empty(), "{what} failed without saying why");
         }
+        // These three return an error; the next three have no caller to tell.
+        ctx.save_snapshot();
+        ctx.save_trend();
+        ctx.save_tree_cache();
+
+        let reported = AppCtx::lock(&seen).clone();
+        assert_eq!(
+            reported,
+            vec![
+                "Saving settings",
+                "Saving project state",
+                "Saving cleanup history",
+                "Saving the last scan",
+                "Saving scan history",
+                "Saving cached folder sizes",
+            ],
+            "every failed write must be reported"
+        );
     }
 
     /// The same write succeeds when the directory is real, so the test above
