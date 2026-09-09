@@ -11,6 +11,8 @@ mod commands;
 mod logging;
 mod scheduler;
 mod state;
+#[cfg(test)]
+mod testing;
 
 use state::AppCtx;
 use std::sync::Arc;

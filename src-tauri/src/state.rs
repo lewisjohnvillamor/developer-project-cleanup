@@ -239,6 +239,7 @@ impl AppCtx {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::TempDir;
 
     fn ctx_with_paths(paths: AppPaths) -> AppCtx {
         AppCtx {
@@ -263,7 +264,7 @@ mod tests {
     /// of what was removed, and how to restore it, is gone.
     #[test]
     fn a_write_that_fails_is_reported_rather_than_swallowed() {
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = TempDir::new("blocked");
         // A regular file where the data directory should be, so every write
         // beneath it fails the way a full or read-only disk would.
         let blocked = tmp.path().join("data");
@@ -284,7 +285,7 @@ mod tests {
     /// is failing for the reason it claims.
     #[test]
     fn a_write_that_can_happen_succeeds() {
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = TempDir::new("writable");
         let paths = AppPaths::in_dir(tmp.path());
         paths.ensure().unwrap();
         let ctx = ctx_with_paths(paths);

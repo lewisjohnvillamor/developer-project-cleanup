@@ -85,10 +85,11 @@ pub fn init(path: &Path, level: log::LevelFilter) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::TempDir;
 
     #[test]
     fn an_oversized_log_is_started_again_and_a_small_one_is_kept() {
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = TempDir::new("log-size");
         let path = tmp.path().join("hibernate.log");
 
         fs::write(&path, b"earlier run\n").unwrap();
@@ -112,7 +113,7 @@ mod tests {
     /// A log that cannot be opened must not stop the app from starting.
     #[test]
     fn an_unopenable_log_is_not_fatal() {
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = TempDir::new("log-blocked");
         let blocked = tmp.path().join("not-a-dir");
         fs::write(&blocked, b"x").unwrap();
         assert!(open_log(&blocked.join("hibernate.log")).is_none());
