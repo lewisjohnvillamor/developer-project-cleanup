@@ -158,7 +158,8 @@ The app keeps its own record of what it removed and how to restore it. If a
 write to that record fails — a full disk, a read-only data directory — it
 says so in the window rather than carrying on from memory, because a
 cleanup the app forgets is a cleanup you cannot undo. The same failures go
-to a log file; **Settings → Copy diagnostics** prints its location.
+to a log file next to the app's data; **Settings → Copy diagnostics**
+prints its location.
 
 ## Layout
 

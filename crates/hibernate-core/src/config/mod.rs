@@ -205,6 +205,7 @@ pub struct AppPaths {
     pub last_scan_file: PathBuf,
     pub tree_cache_file: PathBuf,
     pub scan_trend_file: PathBuf,
+    pub log_file: PathBuf,
 }
 
 impl AppPaths {
@@ -231,6 +232,7 @@ impl AppPaths {
             last_scan_file: dir.join("last-scan.json"),
             tree_cache_file: dir.join("tree-cache.json"),
             scan_trend_file: dir.join("scan-trend.json"),
+            log_file: dir.join("hibernate.log"),
         }
     }
 

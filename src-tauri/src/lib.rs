@@ -8,6 +8,7 @@
 //! - `app-error`         — [`state::AppError`], a write to disk that failed
 
 mod commands;
+mod logging;
 mod scheduler;
 mod state;
 
@@ -16,19 +17,9 @@ use std::sync::Arc;
 
 pub fn run() {
     let ctx = Arc::new(AppCtx::load());
+    logging::init(&ctx.paths.log_file, log::LevelFilter::Info);
 
     tauri::Builder::default()
-        .plugin(
-            tauri_plugin_log::Builder::new()
-                .target(tauri_plugin_log::Target::new(
-                    tauri_plugin_log::TargetKind::LogDir { file_name: None },
-                ))
-                .target(tauri_plugin_log::Target::new(
-                    tauri_plugin_log::TargetKind::Stdout,
-                ))
-                .level(log::LevelFilter::Info)
-                .build(),
-        )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
