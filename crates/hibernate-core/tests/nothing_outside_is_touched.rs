@@ -31,6 +31,16 @@ enum Entry {
     Symlink { target: PathBuf },
 }
 
+/// Git's own bookkeeping locks — `.git/index.lock`, `.git/objects/maintenance.lock`
+/// and friends — appear and vanish on git's schedule rather than ours: a
+/// `git commit` can leave background maintenance running after it returns.
+/// They are not the cleanup's to account for, and recording one made this
+/// test report a removal that git itself had performed. Nothing else under
+/// `.git/` is skipped.
+fn is_git_lock(key: &str) -> bool {
+    key.ends_with(".lock") && key.split('/').any(|part| part == ".git")
+}
+
 /// Record every entry under `root`, following nothing.
 fn manifest(root: &Path) -> BTreeMap<String, Entry> {
     let mut out = BTreeMap::new();
@@ -56,6 +66,9 @@ fn manifest(root: &Path) -> BTreeMap<String, Entry> {
                 out.insert(key, Entry::Dir);
                 stack.push(path);
             } else {
+                if is_git_lock(&key) {
+                    continue;
+                }
                 let bytes = fs::read(&path).unwrap_or_default();
                 let mut h = DefaultHasher::new();
                 bytes.hash(&mut h);
@@ -143,6 +156,11 @@ fn a_real_cleanup_touches_nothing_it_was_not_shown() {
     let have_git = hibernate_core::git::git_available();
     if have_git {
         git(&site, &["init", "-q"]);
+        // Stop git doing background work in the middle of the test. This is
+        // belt and braces with `is_git_lock`: the config keeps most runs
+        // quiet, the filter covers the rest.
+        git(&site, &["config", "gc.auto", "0"]);
+        git(&site, &["config", "maintenance.auto", "false"]);
         git(&site, &["add", "-A"]);
         git(&site, &["commit", "-qm", "init"]);
     }
@@ -307,4 +325,28 @@ fn a_real_cleanup_touches_nothing_it_was_not_shown() {
             "committed dist/ must survive because Git tracks it"
         );
     }
+}
+
+/// The manifest has to ignore git's locks, or a background `git maintenance`
+/// run during the test reports a removal that never happened. Everything else
+/// under `.git/`, and any lock file that is not git's, still counts.
+#[test]
+fn the_manifest_ignores_git_lock_files() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join("repo");
+    write(&repo.join("src/main.rs"), "fn main() {}");
+    write(&repo.join(".git/HEAD"), "ref: refs/heads/main");
+    write(&repo.join(".git/objects/maintenance.lock"), "");
+    write(&repo.join(".git/index.lock"), "");
+    write(&repo.join("src/build.lock"), "not git's");
+
+    let m = manifest(&repo);
+    assert!(m.contains_key("src/main.rs"));
+    assert!(m.contains_key(".git/HEAD"), "the rest of .git still counts");
+    assert!(
+        m.contains_key("src/build.lock"),
+        "only git's own locks are skipped"
+    );
+    assert!(!m.contains_key(".git/objects/maintenance.lock"));
+    assert!(!m.contains_key(".git/index.lock"));
 }
