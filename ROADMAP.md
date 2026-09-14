@@ -26,6 +26,15 @@ general cleaner.
 - Incremental scans, scheduled scans, glob-aware monorepos, six more
   ecosystems, rule preview, Trash restore (Windows/Linux), export, trend,
   command palette, keyboard navigation.
+- Git-aware safety: anything Git tracks is protected, `.gitignore` confirms a
+  folder is generated.
+- Windows reparse points detected explicitly in removal and measurement.
+- Allocated size instead of apparent size, and "moved" rather than "freed"
+  when a removal goes to Trash.
+- A log file, and failed writes reported in the window instead of discarded.
+- Receipts: one test manifests a hostile fixture before and after a real
+  cleanup and fails if anything changed that the plan did not name
+  (`crates/hibernate-core/tests/nothing_outside_is_touched.rs`).
 
 ## Decided
 
@@ -36,20 +45,16 @@ general cleaner.
 
 ## Next (in order)
 
-1. **Git-aware safety.** Treat anything Git tracks as protected, and use
-   `.gitignore` as confirmation that a folder is generated.
-2. **Windows reparse points.** Explicit junction detection in removal and
-   measurement, with tests on a Windows runner.
-3. **Allocated size** instead of apparent size (hardlinked pnpm stores,
-   compressed folders), and honest wording for Trash ("moved", not "freed").
-4. **Re-measure at review time** so the confirmed number is not a cached one.
-5. **Log file + surfaced save errors.**
-6. Updater against GitHub releases.
-7. Homebrew, winget, Scoop, crates.io.
+1. **Re-measure at review time** so the confirmed number is not a cached one.
+2. Updater against GitHub releases.
+3. Homebrew, winget, Scoop, crates.io.
 
 ## Later, maybe
 
 - Docker artifact awareness (read-only report, like the toolchain caches).
+- Vulnerability audit for dormant projects (#20). Proposed, undecided: the
+  engine has never made a network call, and that is worth more than the
+  feature unless the offline path is the default.
 - Project archival to cold storage, with restore.
 - IDE integration ("hibernate this project" from the editor).
 - Localization once there is a second language to ship.
