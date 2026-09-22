@@ -83,7 +83,13 @@ export interface CleanupArtifact {
   relativePath: string;
   kind: string;
   category: ArtifactCategory;
+  /** Bytes removing this folder would actually free. */
   bytes: number;
+  /**
+   * Bytes inside this folder that are hard-linked elsewhere and survive its
+   * removal — already excluded from `bytes`. Usually a pnpm store.
+   */
+  sharedElsewhere: number;
   fileCount: number;
   dirCount: number;
   safety: Safety;

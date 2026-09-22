@@ -230,6 +230,7 @@ mod tests {
             kind: rel.to_string(),
             category: ArtifactCategory::Other,
             bytes,
+            shared_elsewhere: 0,
             file_count: 10,
             dir_count: 2,
             safety,

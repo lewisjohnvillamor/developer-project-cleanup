@@ -130,6 +130,14 @@ export function HibernateDialog() {
                           <span className="flex-1 font-mono text-fg-muted">{a.relativePath}</span>
                           <span className="tabular text-fg-muted">
                             {formatBytes(a.bytes)}
+                            {a.sharedElsewhere > 0 && (
+                              <span
+                                className="ml-1.5 text-fg-subtle"
+                                title={`${formatBytes(a.sharedElsewhere)} inside this folder is hard-linked to a shared store and survives removal, so it is not counted above.`}
+                              >
+                                +{formatBytes(a.sharedElsewhere)} shared
+                              </span>
+                            )}
                             {a.safety === "review" && <span className="ml-1.5 text-review">review</span>}
                           </span>
                         </div>
