@@ -242,6 +242,15 @@ export function ProjectDetailsDrawer() {
                         <span className="tabular text-fg">
                           {formatBytes(a.bytes)} · {formatCount(a.fileCount)} files · {formatCount(a.dirCount)} folders
                         </span>
+                        {a.sharedElsewhere > 0 && (
+                          <>
+                            <span>Shared</span>
+                            <span>
+                              <span className="tabular text-fg">{formatBytes(a.sharedElsewhere)}</span> of this folder is hard-linked to a shared store, so
+                              removing it frees nothing for those files. The recovery figure above already leaves them out.
+                            </span>
+                          </>
+                        )}
                         <span>Restore</span>
                         <span className="font-mono text-[11.5px] text-fg selectable">{a.restoreHint ?? "Regenerated automatically by the toolchain"}</span>
                         {a.trackedByGit && (

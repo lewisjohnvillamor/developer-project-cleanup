@@ -157,6 +157,7 @@ mod tests {
                     kind: "node_modules".into(),
                     category: ArtifactCategory::NodeDependencies,
                     bytes: 0,
+                    shared_elsewhere: 0,
                     file_count: 0,
                     dir_count: 0,
                     safety: Safety::Safe,

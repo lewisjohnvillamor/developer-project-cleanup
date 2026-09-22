@@ -220,7 +220,16 @@ pub struct CleanupArtifact {
     /// Rule id that matched, e.g. `node_modules`.
     pub kind: String,
     pub category: ArtifactCategory,
+    /// Bytes that removing this directory would actually free. Content
+    /// hard-linked outside the directory is excluded, because unlinking one
+    /// of several links frees nothing.
     pub bytes: u64,
+    /// Bytes inside this directory that are hard-linked somewhere else and
+    /// so survive its removal, already excluded from `bytes`. A pnpm store
+    /// is the usual reason, and without this the honest `bytes` looks
+    /// inexplicably small next to the folder's apparent size.
+    #[serde(default)]
+    pub shared_elsewhere: u64,
     pub file_count: u64,
     pub dir_count: u64,
     pub safety: Safety,

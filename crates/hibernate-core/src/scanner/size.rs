@@ -157,6 +157,7 @@ pub fn measure(
                             kind: rule.id.clone(),
                             category: rule.category,
                             bytes: tree.bytes,
+                            shared_elsewhere: tree.shared_elsewhere,
                             file_count: tree.files,
                             dir_count: tree.dirs,
                             safety: rule.safety,
@@ -302,6 +303,78 @@ mod tests {
     fn write(path: &Path, bytes: usize) {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, vec![b'x'; bytes]).unwrap();
+    }
+
+    /// The scanner knows how much of an artifact is hard-linked to a shared
+    /// store and therefore survives removal. That number has to reach the
+    /// artifact, not just the internal tree measurement: without it a pnpm
+    /// `node_modules/` reports a recovery far smaller than its apparent size
+    /// with nothing on screen to explain why.
+    #[cfg(unix)]
+    #[test]
+    fn an_artifact_carries_what_is_shared_with_a_store() {
+        let tmp = tempdir().unwrap();
+        let p = tmp.path().join("web");
+        write(&p.join("package.json"), 100);
+        write(&p.join("src/index.ts"), 200);
+
+        // A pnpm-shaped layout: the store lives outside the project and
+        // node_modules is hard-linked into it.
+        let store = tmp.path().join("store");
+        write(&store.join("blob.bin"), 120_000);
+        fs::create_dir_all(p.join("node_modules/pkg")).unwrap();
+        fs::hard_link(store.join("blob.bin"), p.join("node_modules/pkg/blob.bin")).unwrap();
+        write(&p.join("node_modules/pkg/own.js"), 4_000);
+
+        let rules = RuleSet::builtin();
+        let paths = HashSet::new();
+        let opts = MeasureOptions {
+            follow_symlinks: false,
+            rules: &rules,
+            project_paths: &paths,
+            ignored_paths: &[],
+            cache: None,
+        };
+        let m = measure(
+            &p,
+            &[Stack::Node],
+            &|_| None,
+            &opts,
+            &AtomicBool::new(false),
+        );
+
+        let nm = m
+            .artifacts
+            .iter()
+            .find(|a| a.kind == "node_modules")
+            .expect("node_modules is an artifact");
+        assert!(
+            nm.shared_elsewhere >= 120_000,
+            "the store-linked blob must be reported as shared, got {}",
+            nm.shared_elsewhere
+        );
+        assert!(
+            nm.bytes < 120_000,
+            "bytes must exclude what survives removal, got {}",
+            nm.bytes
+        );
+
+        // A folder with nothing shared says so, rather than leaving the
+        // caller to guess whether zero means "none" or "not measured".
+        write(&p.join(".next/cache/x"), 3_000);
+        let m2 = measure(
+            &p,
+            &[Stack::Node],
+            &|_| None,
+            &opts,
+            &AtomicBool::new(false),
+        );
+        let next = m2
+            .artifacts
+            .iter()
+            .find(|a| a.kind == "next")
+            .expect(".next is an artifact");
+        assert_eq!(next.shared_elsewhere, 0);
     }
 
     #[test]

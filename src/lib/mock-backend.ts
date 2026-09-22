@@ -136,6 +136,9 @@ function artifactsFor(stack: Stack, size: number, r: () => number, path: string,
     kind,
     category,
     bytes: Math.round(bytes),
+    // pnpm hard-links most of node_modules into a shared store, so a good
+    // part of what is in the folder is not what removing it would free.
+    sharedElsewhere: kind === "node_modules" ? Math.round(bytes * 2.4) : 0,
     fileCount: Math.round(bytes / 9000) + 1,
     dirCount: Math.round(bytes / 120000) + 1,
     safety,
