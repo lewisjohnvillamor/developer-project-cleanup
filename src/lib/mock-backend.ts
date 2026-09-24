@@ -498,6 +498,9 @@ export function createMockBackend(): Backend {
       skippedProtected,
       skippedUnknown: [],
       disposition: settings.disposition,
+      // The desktop app re-measures before showing the review; the mock has
+      // no disk to re-read, so it reports a clean re-check.
+      refreshed: { changed: 0, vanished: 0, bytesBefore: planned.reduce((s, p) => s + p.bytes, 0) },
     };
   };
 

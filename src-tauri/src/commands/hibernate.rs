@@ -5,14 +5,34 @@ use hibernate_core::cleanup::hibernate::{
 use hibernate_core::history::{ArtifactOutcome, HistoryEntry, HistoryStore};
 use hibernate_core::model::{Project, Safety};
 use serde::Serialize;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 
+/// Build the review, then re-measure it against the disk so the number the
+/// user confirms is current rather than whatever the last scan recorded.
+/// Runs off the UI thread: unchanged folders are only fingerprinted, but a
+/// project built since the scan has to be walked again.
 #[tauri::command]
-pub fn plan_hibernate(ctx: State<'_, Arc<AppCtx>>, request: HibernateRequest) -> HibernatePlan {
-    let disposition = AppCtx::lock(&ctx.settings).disposition;
-    let snap = AppCtx::lock(&ctx.snapshot);
-    hib::plan(&snap.projects, &request, disposition)
+pub async fn plan_hibernate(
+    ctx: State<'_, Arc<AppCtx>>,
+    request: HibernateRequest,
+) -> Result<HibernatePlan, String> {
+    let ctx = ctx.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let disposition = AppCtx::lock(&ctx.settings).disposition;
+        let mut plan = {
+            let snap = AppCtx::lock(&ctx.snapshot);
+            hib::plan(&snap.projects, &request, disposition)
+        };
+        // The scan's cancel flag is not ours to use here; a review is quick
+        // enough that it runs to completion.
+        hib::refresh(&mut plan, Some(&ctx.tree_cache), &AtomicBool::new(false));
+        ctx.save_tree_cache();
+        plan
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -40,7 +60,12 @@ pub fn start_hibernate(
             .unwrap_or_default();
         (snap.projects.clone(), roots)
     };
-    let plan = hib::plan(&projects, &request, disposition);
+    let mut plan = hib::plan(&projects, &request, disposition);
+    // The review was re-measured, so measure again here rather than starting
+    // from the scan's figures: the progress total would otherwise disagree
+    // with the number the user just confirmed. Everything was measured
+    // seconds ago, so this is a fingerprint check per folder.
+    hib::refresh(&mut plan, Some(&ctx.tree_cache), &AtomicBool::new(false));
     if plan.is_empty() {
         ctx.hibernate.end();
         return Err("Nothing to hibernate in the selected projects".into());

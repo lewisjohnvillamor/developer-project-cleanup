@@ -76,7 +76,14 @@ export function HibernateDialog() {
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-[13px]">
               <span className="text-fg-muted">Estimated recovery</span>
-              <span className="text-[20px] font-semibold tabular leading-6 text-accent">{formatBytes(plan.totalBytes)}</span>
+              <span className="text-[20px] font-semibold tabular leading-6 text-accent">
+                {formatBytes(plan.totalBytes)}
+                {plan.refreshed && (plan.refreshed.changed > 0 || plan.refreshed.vanished > 0) && (
+                  <span className="ml-2 align-middle text-[12px] font-normal text-fg-subtle">
+                    re-measured just now, was {formatBytes(plan.refreshed.bytesBefore)}
+                  </span>
+                )}
+              </span>
               <span className="text-fg-muted">Safe items</span>
               <span className="tabular text-fg">
                 {formatCount(plan.folderCount)} folders · {formatCount(plan.fileCount)} files

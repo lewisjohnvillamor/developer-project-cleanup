@@ -627,7 +627,16 @@ fn cmd_hibernate(
         selection,
         include_review,
     };
-    let plan = hib::plan(&projects, &request, disposition);
+    let mut plan = hib::plan(&projects, &request, disposition);
+    // Measure again before quoting a figure: a scan from earlier in the
+    // session may predate a build.
+    let refreshed = hib::refresh(&mut plan, None, &AtomicBool::new(false));
+    if refreshed.changed > 0 || refreshed.vanished > 0 {
+        println!(
+            "re-measured: {} folder(s) changed since the scan, {} no longer exist",
+            refreshed.changed, refreshed.vanished
+        );
+    }
     for name in &plan.skipped_protected {
         println!("skipping protected project {name}");
     }
