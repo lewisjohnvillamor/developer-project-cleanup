@@ -35,6 +35,10 @@ general cleaner.
 - Receipts: one test manifests a hostile fixture before and after a real
   cleanup and fails if anything changed that the plan did not name
   (`crates/hibernate-core/tests/nothing_outside_is_touched.rs`).
+- Hard-linked bytes shown per folder, so an honest figure no longer looks
+  like a mistake on a pnpm machine.
+- Re-measure at review time: the figure the user confirms comes from the
+  disk, not from the last scan.
 
 ## Decided
 
@@ -45,9 +49,8 @@ general cleaner.
 
 ## Next (in order)
 
-1. **Re-measure at review time** so the confirmed number is not a cached one.
-2. Updater against GitHub releases.
-3. Homebrew, winget, Scoop, crates.io.
+1. Updater against GitHub releases.
+2. Homebrew, winget, Scoop, crates.io.
 
 ## Later, maybe
 

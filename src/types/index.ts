@@ -262,6 +262,16 @@ export interface PlannedProject {
   warnings: string[];
 }
 
+/** What re-measuring a plan against the disk found. */
+export interface RefreshReport {
+  /** Folders whose size differs from what the scan recorded. */
+  changed: number;
+  /** Folders that no longer exist and were dropped from the plan. */
+  vanished: number;
+  /** The plan's total before re-measuring. */
+  bytesBefore: number;
+}
+
 export interface HibernatePlan {
   projects: PlannedProject[];
   totalBytes: number;
@@ -271,6 +281,8 @@ export interface HibernatePlan {
   skippedProtected: string[];
   skippedUnknown: string[];
   disposition: Disposition;
+  /** Present once the plan was re-measured against the disk. */
+  refreshed: RefreshReport | null;
 }
 
 export interface FailedPath {

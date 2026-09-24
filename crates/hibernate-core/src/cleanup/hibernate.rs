@@ -8,6 +8,8 @@ use crate::cleanup::trash::send_to_trash;
 use crate::config::Disposition;
 use crate::history::{ArtifactOutcome, HistoryArtifact, HistoryEntry, HistoryProject};
 use crate::model::{CleanupArtifact, GitState, Project, Safety};
+use crate::scanner::size::measure_tree_cached;
+use crate::scanner::SharedTreeCache;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -58,6 +60,24 @@ pub struct HibernatePlan {
     pub skipped_protected: Vec<String>,
     pub skipped_unknown: Vec<String>,
     pub disposition: Disposition,
+    /// Set once [`refresh`] has re-measured the plan against the disk.
+    /// `None` means the figures still come from the last scan.
+    #[serde(default)]
+    pub refreshed: Option<RefreshReport>,
+}
+
+/// What re-measuring a plan found, so the review can say whether the number
+/// moved rather than quietly showing a different one.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RefreshReport {
+    /// Folders whose size on disk differs from what the scan recorded.
+    pub changed: usize,
+    /// Folders that no longer exist and were dropped from the plan.
+    pub vanished: usize,
+    /// The plan's total before re-measuring, so the UI can say which way it
+    /// moved without keeping its own copy.
+    pub bytes_before: u64,
 }
 
 impl HibernatePlan {
@@ -82,6 +102,7 @@ pub fn plan(
         skipped_protected: Vec::new(),
         skipped_unknown: Vec::new(),
         disposition,
+        refreshed: None,
     };
 
     for sel in &request.selection {
@@ -137,6 +158,67 @@ pub fn plan(
     }
     plan.projects.sort_by_key(|p| std::cmp::Reverse(p.bytes));
     plan
+}
+
+/// Re-measure everything the plan would remove, so the figure the user
+/// confirms is what is on disk now rather than what the last scan recorded.
+///
+/// A project built since the scan can have grown by gigabytes, and a folder
+/// deleted by hand is already gone. Confirming a stale number is the one way
+/// this product can be careful in its code and still mislead on screen.
+///
+/// Unchanged folders cost a fingerprint check — a handful of `readdir` calls
+/// — so the common case is cheap and only what actually moved is walked
+/// again. On cancellation the plan is left partially refreshed and the
+/// caller should discard it rather than show it.
+pub fn refresh(
+    plan: &mut HibernatePlan,
+    cache: Option<&SharedTreeCache>,
+    cancel: &AtomicBool,
+) -> RefreshReport {
+    let mut report = RefreshReport {
+        bytes_before: plan.total_bytes,
+        ..RefreshReport::default()
+    };
+
+    for project in &mut plan.projects {
+        project.artifacts.retain_mut(|artifact| {
+            if cancel.load(Ordering::Relaxed) {
+                return true;
+            }
+            if !artifact.path.is_dir() {
+                report.vanished += 1;
+                return false;
+            }
+            let (size, _) = measure_tree_cached(&artifact.path, cache, cancel);
+            if size.bytes != artifact.bytes {
+                report.changed += 1;
+            }
+            artifact.bytes = size.bytes;
+            artifact.shared_elsewhere = size.shared_elsewhere;
+            artifact.file_count = size.files;
+            artifact.dir_count = size.dirs;
+            true
+        });
+        project.bytes = project.artifacts.iter().map(|a| a.bytes).sum();
+    }
+
+    plan.total_bytes = plan.projects.iter().map(|p| p.bytes).sum();
+    plan.folder_count = plan
+        .projects
+        .iter()
+        .flat_map(|p| &p.artifacts)
+        .map(|a| a.dir_count)
+        .sum();
+    plan.file_count = plan
+        .projects
+        .iter()
+        .flat_map(|p| &p.artifacts)
+        .map(|a| a.file_count)
+        .sum();
+    plan.projects.sort_by_key(|p| std::cmp::Reverse(p.bytes));
+    plan.refreshed = Some(report.clone());
+    report
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -469,6 +551,76 @@ mod tests {
             &|_| {},
         );
         (tmp, result.projects, roots)
+    }
+
+    /// The review is the last thing the user reads before agreeing, so its
+    /// figure has to come from the disk rather than from whatever the scan
+    /// recorded. A project built since the scan has grown; a folder deleted
+    /// by hand is gone. Showing the old number for either is the one way
+    /// this product can be careful in its code and still mislead on screen.
+    #[test]
+    fn the_review_figure_is_measured_again_not_remembered() {
+        let (tmp, projects, _roots) = fixture();
+        let sel: Vec<SelectedProject> = projects
+            .iter()
+            .map(|p| SelectedProject {
+                project_id: p.id.clone(),
+                artifact_paths: None,
+            })
+            .collect();
+        let req = HibernateRequest {
+            selection: sel,
+            include_review: false,
+        };
+
+        let mut stale = plan(&projects, &req, Disposition::Permanent);
+        let scanned_total = stale.total_bytes;
+        assert!(
+            stale.refreshed.is_none(),
+            "a fresh plan is not yet measured"
+        );
+
+        // Between the scan and the review: a build fills node_modules, and
+        // the user deletes .next themselves.
+        let web = tmp.path().join("Projects/web");
+        write(&web.join("node_modules/a/huge.js"), 400_000);
+        fs::remove_dir_all(web.join(".next")).unwrap();
+
+        let report = refresh(&mut stale, None, &AtomicBool::new(false));
+
+        assert_eq!(report.bytes_before, scanned_total);
+        assert_eq!(report.vanished, 1, ".next is gone and leaves the plan");
+        assert!(
+            report.changed >= 1,
+            "node_modules grew, got {}",
+            report.changed
+        );
+        assert!(
+            stale.total_bytes > scanned_total,
+            "the new total must reflect the build: {} vs {scanned_total}",
+            stale.total_bytes
+        );
+        assert!(
+            !stale
+                .projects
+                .iter()
+                .flat_map(|p| &p.artifacts)
+                .any(|a| a.relative_path.contains(".next")),
+            "a folder that no longer exists must not be offered for removal"
+        );
+        assert_eq!(stale.refreshed.as_ref().map(|r| r.vanished), Some(1));
+
+        // Per-project and plan totals stay in step with the artifacts.
+        for project in &stale.projects {
+            assert_eq!(
+                project.bytes,
+                project.artifacts.iter().map(|a| a.bytes).sum::<u64>()
+            );
+        }
+        assert_eq!(
+            stale.total_bytes,
+            stale.projects.iter().map(|p| p.bytes).sum::<u64>()
+        );
     }
 
     #[test]
