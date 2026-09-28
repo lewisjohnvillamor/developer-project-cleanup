@@ -6,6 +6,7 @@
 //! what can be rebuilt**. Nothing in this crate deletes source code. Every
 //! removal goes through [`cleanup::safety`] first.
 
+pub mod audit;
 pub mod caches;
 pub mod cleanup;
 pub mod config;
@@ -19,6 +20,7 @@ pub mod projects;
 pub mod scanner;
 pub mod wake;
 
+pub use audit::{audit, AdvisoryDb, AuditReport, Finding, ProjectAudit, Severity};
 pub use cleanup::hibernate::{HibernateEvent, HibernatePlan, HibernateRequest, PlannedProject};
 pub use cleanup::rules::{CleanupRule, RuleSet};
 pub use config::{AppPaths, AppState, Disposition, Settings, Theme};
