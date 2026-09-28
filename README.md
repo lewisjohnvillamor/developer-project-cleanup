@@ -152,6 +152,33 @@ fails if *anything* changed that the plan did not name. Source files,
 `.env`, a SQLite database, migrations, a committed `dist/` and the vault all
 have to come back byte-for-byte identical.
 
+### Auditing what a dormant project would reinstall
+
+A project you hibernated six months ago still pins exact versions in its
+lockfile. Wake it and `npm ci` faithfully reinstalls whatever was pinned —
+including anything found vulnerable since. Dependabot and Renovate only watch
+what you push to a forge, so local experiments, archived clones and last
+year's client work are nobody's job. Those are exactly the projects this app
+already has an inventory of.
+
+```
+hibernate audit ~/Projects --db ./osv-data
+```
+
+It reads **lockfiles only**, so hibernated projects are covered — the
+lockfile is protected and never removed. Exit code is 1 when anything is
+found, so it can gate a script.
+
+Two things it deliberately will not do:
+
+- **It never goes online.** `--db` is a local path: a JSON file of OSV
+  advisories, or a directory of them. How that data reaches your disk is your
+  choice, and keeping it out of the engine is why the dependency list still
+  backs up "nothing leaves your machine".
+- **It never calls a project clean that it could not read.** A project with
+  no lockfile we parse is reported as *not checked*, not as safe. Currently
+  `package-lock.json` and `Cargo.lock`; more behind the same interface.
+
 ### When a write fails
 
 The app keeps its own record of what it removed and how to restore it. If a

@@ -39,6 +39,9 @@ general cleaner.
   like a mistake on a pnpm machine.
 - Re-measure at review time: the figure the user confirms comes from the
   disk, not from the last scan.
+- `hibernate audit`: known-vulnerable dependencies in dormant projects,
+  matched offline against local OSV data. The engine still makes no network
+  call of its own.
 
 ## Decided
 
@@ -55,9 +58,9 @@ general cleaner.
 ## Later, maybe
 
 - Docker artifact awareness (read-only report, like the toolchain caches).
-- Vulnerability audit for dormant projects (#20). Proposed, undecided: the
-  engine has never made a network call, and that is worth more than the
-  feature unless the offline path is the default.
+- Advisory data acquisition for `hibernate audit` (#20). The matching is
+  done and offline; what remains is how OSV data reaches the disk. The
+  engine making its own network call is still the thing to avoid.
 - Project archival to cold storage, with restore.
 - IDE integration ("hibernate this project" from the editor).
 - Localization once there is a second language to ship.

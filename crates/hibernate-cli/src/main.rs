@@ -9,6 +9,7 @@
 
 use chrono::Utc;
 use clap::{Parser, Subcommand, ValueEnum};
+use hibernate_core::audit::{self, AdvisoryDb, Severity};
 use hibernate_core::cleanup::hibernate::{
     self as hib, ExecutionContext, HibernateEvent, HibernateRequest, SelectedProject,
 };
@@ -48,6 +49,25 @@ impl From<DispositionArg> for Disposition {
             DispositionArg::Trash => Disposition::Trash,
             DispositionArg::Quarantine => Disposition::Quarantine,
             DispositionArg::Permanent => Disposition::Permanent,
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+enum SeverityArg {
+    Low,
+    Moderate,
+    High,
+    Critical,
+}
+
+impl From<SeverityArg> for Severity {
+    fn from(value: SeverityArg) -> Self {
+        match value {
+            SeverityArg::Low => Severity::Low,
+            SeverityArg::Moderate => Severity::Moderate,
+            SeverityArg::High => Severity::High,
+            SeverityArg::Critical => Severity::Critical,
         }
     }
 }
@@ -93,6 +113,22 @@ enum Command {
     },
     /// Show global toolchain caches (Cargo registry, npm cache, …) and how to clean them.
     Caches {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Report projects whose pinned dependencies have known vulnerabilities.
+    ///
+    /// Reads lockfiles only, so hibernated projects are covered too. The
+    /// advisory database is a local path: nothing is sent anywhere.
+    Audit {
+        /// Folders to scan. Defaults to the folders saved in Settings.
+        roots: Vec<PathBuf>,
+        /// Path to OSV advisory data: a JSON file, or a directory of them.
+        #[arg(long, value_name = "PATH")]
+        db: PathBuf,
+        /// Only report findings at this severity or worse.
+        #[arg(long, value_enum, default_value_t = SeverityArg::Low)]
+        min_severity: SeverityArg,
         #[arg(long)]
         json: bool,
     },
@@ -219,6 +255,23 @@ fn main() {
                 println!("\n{} in caches total", format::bytes(total));
             }
             0
+        }
+        Command::Audit {
+            roots,
+            db,
+            min_severity,
+            json,
+        } => {
+            let roots = roots_or_saved(roots, &settings);
+            cmd_audit(
+                &paths,
+                &settings,
+                &state,
+                &roots,
+                &db,
+                min_severity.into(),
+                json,
+            )
         }
         Command::Export {
             roots,
@@ -382,6 +435,120 @@ fn roots_or_saved(roots: Vec<PathBuf>, settings: &Settings) -> Vec<PathBuf> {
     } else {
         roots
     }
+}
+
+/// Report which projects pin something with a known advisory against it.
+///
+/// Exit code 1 when anything is found, so this can gate a script.
+#[allow(clippy::too_many_arguments)]
+fn cmd_audit(
+    paths: &AppPaths,
+    settings: &Settings,
+    state: &AppState,
+    roots: &[PathBuf],
+    db_path: &Path,
+    min_severity: Severity,
+    json: bool,
+) -> i32 {
+    let db = match AdvisoryDb::load(db_path) {
+        Ok(db) => db,
+        Err(err) => {
+            eprintln!(
+                "error: cannot read advisory data at {}: {err}",
+                db_path.display()
+            );
+            return 2;
+        }
+    };
+    if db.is_empty() {
+        eprintln!(
+            "error: no advisories found in {}. Point --db at OSV data: a JSON file, or a directory of them.",
+            db_path.display()
+        );
+        return 2;
+    }
+
+    let mut opts = settings.scan_options();
+    let cache = load_cache(paths, settings, false);
+    opts.tree_cache = cache.clone();
+    let result = run_scan(roots, &opts, state, !json);
+    save_cache(paths, cache);
+
+    let mut report = audit::audit(&result.projects, &db);
+    for project in &mut report.projects {
+        project.findings.retain(|f| f.severity >= min_severity);
+    }
+
+    if json {
+        match serde_json::to_string_pretty(&report) {
+            Ok(text) => println!("{text}"),
+            Err(err) => {
+                eprintln!("error: {err}");
+                return 2;
+            }
+        }
+        return i32::from(report.total_findings() > 0);
+    }
+
+    let affected = report.affected();
+    let unaudited = report.projects.iter().filter(|p| p.not_audited()).count();
+
+    println!(
+        "Checked {} project{} against {} advisor{}.",
+        report.projects.len(),
+        if report.projects.len() == 1 { "" } else { "s" },
+        report.advisories,
+        if report.advisories == 1 { "y" } else { "ies" }
+    );
+    if unaudited > 0 {
+        // Saying "clean" about a project we never read would be the worst
+        // possible lie for a security report.
+        println!(
+            "{unaudited} project{} had no lockfile we can read and {} not checked.",
+            if unaudited == 1 { "" } else { "s" },
+            if unaudited == 1 { "was" } else { "were" }
+        );
+    }
+    println!();
+
+    if affected.is_empty() {
+        println!("No known vulnerabilities in what was checked.");
+        return 0;
+    }
+
+    for project in &affected {
+        println!("{}  ({})", project.name, project.path.display());
+        for finding in &project.findings {
+            let fix = match &finding.fixed {
+                Some(v) => format!("fixed in {v}"),
+                None => "no fix published".to_string(),
+            };
+            println!(
+                "  {:<9} {}@{}  {}  [{}]",
+                finding.severity.label(),
+                finding.package.name,
+                finding.package.version,
+                fix,
+                finding.id
+            );
+            if !finding.summary.is_empty() {
+                println!("            {}", finding.summary);
+            }
+        }
+        println!();
+    }
+    println!(
+        "{} finding{} across {} project{}.",
+        report.total_findings(),
+        if report.total_findings() == 1 {
+            ""
+        } else {
+            "s"
+        },
+        affected.len(),
+        if affected.len() == 1 { "" } else { "s" }
+    );
+    1
 }
 
 fn run_scan(
