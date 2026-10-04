@@ -2,6 +2,7 @@ import { ArrowRight, FolderPlus, Moon, Search, ShieldCheck, Sparkles } from "luc
 import { StatusBadge } from "@/components/common/Badge";
 import { Button } from "@/components/common/Button";
 import { Card } from "@/components/common/Card";
+import { SecurityCheck } from "@/components/security/SecurityCheck";
 import { GlobalCaches } from "@/components/storage/GlobalCaches";
 import { RecentCleanup } from "@/components/storage/RecentCleanup";
 import { ReclaimTrend } from "@/components/storage/ReclaimTrend";
@@ -154,6 +155,8 @@ export function OverviewPage() {
             <RecentCleanup />
           </div>
         </div>
+
+        <SecurityCheck />
 
         <GlobalCaches />
 

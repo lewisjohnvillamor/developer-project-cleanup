@@ -38,6 +38,52 @@ const BUILTIN_RULES: { pattern: string; stacks: string; safety: "safe" | "review
   { pattern: "Library/ Temp/ Logs/", stacks: "Unity", safety: "safe", why: "Editor caches, regenerated when the project opens." },
 ];
 
+/** Path to OSV advisory data. Saved on Enter or blur, so typing does not save a half-written path. */
+function AdvisoryDbField() {
+  const value = useAppStore((s) => s.settings.advisoryDb);
+  const save = useAppStore((s) => s.saveSettings);
+  const backend = useAppStore((s) => s.backend);
+  const [draft, setDraft] = useState(value ?? "");
+  useEffect(() => setDraft(value ?? ""), [value]);
+  const commit = (v: string) => {
+    const next = v.trim() || null;
+    if (next !== value) save({ advisoryDb: next });
+  };
+  return (
+    <div className="flex flex-col gap-1.5 py-2">
+      <div>
+        <div className="text-[13px] font-medium text-fg">Vulnerability data</div>
+        <div className="text-[12px] text-fg-muted">
+          A JSON file or folder of OSV advisories, such as an unpacked export from osv.dev. The app reads it and never downloads it.
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <div className="flex-1" onBlur={() => commit(draft)}>
+          <TextInput value={draft} onChange={setDraft} onKeyDown={(e) => e.key === "Enter" && commit(draft)} placeholder="/path/to/osv-data" mono />
+        </div>
+        <Button
+          variant="outline"
+          icon={<Folder size={13} />}
+          onClick={async () => {
+            const [picked] = (await backend?.pickFolders()) ?? [];
+            if (picked) {
+              setDraft(picked);
+              commit(picked);
+            }
+          }}
+        >
+          Choose
+        </Button>
+        {value && (
+          <IconButton title="Stop using vulnerability data" onClick={() => commit("")}>
+            <Eraser size={13} />
+          </IconButton>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Section({ title, children, description }: { title: string; description?: string; children: React.ReactNode }) {
   return (
     <Card title={title}>
@@ -478,6 +524,13 @@ export function SettingsPage() {
               placeholder={info?.platform === "windows" ? "C:\\Users\\me\\Projects\\archive" : "/home/me/Projects/archive"}
             />
           </div>
+        </Section>
+
+        <Section
+          title="Security check"
+          description="Finds known-vulnerable dependencies in your projects, including hibernated ones, by reading their lockfiles. Nothing leaves this machine."
+        >
+          <AdvisoryDbField />
         </Section>
 
         <Section title="Data">

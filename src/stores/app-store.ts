@@ -4,6 +4,7 @@ import type {
   AppError,
   AppInfo,
   ArtifactOutcome,
+  AuditReport,
   ExportFormat,
   GlobalCache,
   HibernateEvent,
@@ -126,6 +127,9 @@ interface AppStore {
   quarantine: QuarantineBatch[];
   caches: GlobalCache[] | null;
   cachesLoading: boolean;
+  /** Last security check, or null if none has run since the last scan. */
+  audit: AuditReport | null;
+  auditRunning: boolean;
   trend: ScanRecord[];
   cacheEntries: number;
   paletteOpen: boolean;
@@ -176,6 +180,7 @@ interface AppStore {
   loadQuarantine(): Promise<void>;
   purgeQuarantine(entryId: string): Promise<void>;
   loadCaches(): Promise<void>;
+  runAudit(): Promise<void>;
   exportProjects(format: ExportFormat): Promise<void>;
   copyDiagnostics(): Promise<void>;
   excludeFolder(path: string): Promise<void>;
@@ -227,6 +232,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   quarantine: [],
   caches: null,
   cachesLoading: false,
+  audit: null,
+  auditRunning: false,
   trend: [],
   cacheEntries: 0,
   paletteOpen: false,
@@ -260,6 +267,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
       switch (e.type) {
         case "started":
           set({
+            // The project list is about to change; a check of the old one
+            // would describe projects that may no longer be there.
+            audit: null,
             scan: { running: true, discovered: 0, scanned: 0, currentName: null, warnings: [], cancelled: false },
             projects: [],
             summary: null,
@@ -719,6 +729,27 @@ export const useAppStore = create<AppStore>((set, get) => ({
       set({ info });
     } catch (err) {
       get().toast(String(err), "error");
+    }
+  },
+
+  async runAudit() {
+    const { backend, auditRunning } = get();
+    if (!backend || auditRunning) return;
+    set({ auditRunning: true });
+    try {
+      const audit = await backend.runAudit();
+      set({ audit });
+      const affected = audit.projects.filter((p) => p.findings.length > 0).length;
+      get().toast(
+        affected
+          ? `${affected} project${affected === 1 ? " has" : "s have"} known vulnerabilities.`
+          : "No known vulnerabilities in the projects that could be checked.",
+        affected ? "error" : "success",
+      );
+    } catch (err) {
+      get().toast(String(err), "error");
+    } finally {
+      set({ auditRunning: false });
     }
   },
 

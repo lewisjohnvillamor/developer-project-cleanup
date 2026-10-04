@@ -38,6 +38,38 @@ describe("app store with the mock backend", () => {
     expect(after.trend.length).toBeGreaterThan(1);
   }, 30_000);
 
+  it("checks for vulnerabilities only once pointed at advisory data, and never calls an unread project clean", async () => {
+    const s = useAppStore.getState();
+    // Without data it refuses rather than reporting an empty, reassuring result.
+    await s.runAudit();
+    expect(useAppStore.getState().audit).toBeNull();
+    expect(useAppStore.getState().toasts.at(-1)?.message).toMatch(/Settings/);
+
+    await s.saveSettings({ advisoryDb: "/data/osv" });
+    await useAppStore.getState().runAudit();
+    const audit = useAppStore.getState().audit!;
+    expect(audit).not.toBeNull();
+    expect(audit.projects.length).toBe(useAppStore.getState().projects.length);
+    expect(audit.projects.some((p) => p.findings.length > 0)).toBe(true);
+
+    // Stacks whose lockfiles are not read come back as not checked: zero
+    // packages, no findings. Never "clean" by omission.
+    const byId = new Map(useAppStore.getState().projects.map((p) => [p.id, p]));
+    for (const pa of audit.projects) {
+      const stacks = byId.get(pa.projectId)!.stacks;
+      if (!stacks.includes("node") && !stacks.includes("rust")) {
+        expect(pa.packages).toBe(0);
+        expect(pa.findings).toEqual([]);
+      }
+    }
+
+    // A rescan describes a different set of projects, so the old check goes.
+    await useAppStore.getState().startScan();
+    await until(() => useAppStore.getState().scan.running);
+    expect(useAppStore.getState().audit).toBeNull();
+    await until(() => !useAppStore.getState().scan.running);
+  }, 30_000);
+
   it("never bulk-selects protected projects and plans without review items", async () => {
     const s = useAppStore.getState();
     const protectedProject = s.projects.find((p) => p.protected)!;

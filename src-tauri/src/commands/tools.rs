@@ -1,4 +1,5 @@
 use crate::state::AppCtx;
+use hibernate_core::audit::{self, AdvisoryDb, AuditReport};
 use hibernate_core::caches::{measure_caches, GlobalCache};
 use hibernate_core::cleanup::quarantine::QuarantineBatch;
 use hibernate_core::cleanup::rules::{preview_matches, RuleMatch};
@@ -189,4 +190,29 @@ pub fn get_diagnostics(ctx: State<'_, Arc<AppCtx>>) -> String {
         history.entries.iter().map(|e| e.error_count).sum::<usize>()
     ));
     out
+}
+
+/// Check every project from the last scan against the advisory data the
+/// user pointed at in Settings. Reads lockfiles only, so hibernated projects
+/// are covered. Never touches the network: the data is a local path.
+#[tauri::command]
+pub async fn run_audit(ctx: State<'_, Arc<AppCtx>>) -> Result<AuditReport, String> {
+    let ctx = ctx.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(path) = AppCtx::lock(&ctx.settings).advisory_db.clone() else {
+            return Err("Choose where your vulnerability data lives in Settings first.".to_string());
+        };
+        let db = AdvisoryDb::load(&path)
+            .map_err(|e| format!("Cannot read vulnerability data at {}: {e}", path.display()))?;
+        if db.is_empty() {
+            return Err(format!(
+                "No advisories found in {}. It should be OSV data: a JSON file, or a folder of them.",
+                path.display()
+            ));
+        }
+        let projects = AppCtx::lock(&ctx.snapshot).projects.clone();
+        Ok(audit::audit(&projects, &db))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }

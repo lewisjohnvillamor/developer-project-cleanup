@@ -169,6 +169,11 @@ It reads **lockfiles only**, so hibernated projects are covered — the
 lockfile is protected and never removed. Exit code is 1 when anything is
 found, so it can gate a script.
 
+In the desktop app, point **Settings → Security check** at the same data and
+press **Check now** on the Overview. Affected projects are listed worst
+first, and each project's details show the vulnerable versions — with a
+warning that waking a hibernated one reinstalls them exactly.
+
 Two things it deliberately will not do:
 
 - **It never goes online.** `--db` is a local path: a JSON file of OSV
