@@ -219,6 +219,8 @@ export interface Settings {
   incrementalScans: boolean;
   scheduledScanHours: number;
   notifyThresholdBytes: number;
+  /** OSV advisory data: a JSON file or a folder of them. Never downloaded by the app. */
+  advisoryDb: string | null;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -239,6 +241,7 @@ export const DEFAULT_SETTINGS: Settings = {
   incrementalScans: true,
   scheduledScanHours: 0,
   notifyThresholdBytes: 1_000_000_000,
+  advisoryDb: null,
 };
 
 export interface SelectedProject {
@@ -477,4 +480,38 @@ export type ExportFormat = "csv" | "json";
 
 export interface CacheInfo {
   entries: number;
+}
+
+// ---- security check ---------------------------------------------------------
+
+export type Severity = "unknown" | "low" | "moderate" | "high" | "critical";
+
+export interface DependencyRef {
+  ecosystem: "npm" | "crates.io";
+  name: string;
+  version: string;
+}
+
+export interface Finding {
+  package: DependencyRef;
+  /** Advisory id, e.g. GHSA-… or RUSTSEC-… */
+  id: string;
+  summary: string;
+  severity: Severity;
+  /** First version that is not affected, when the advisory names one. */
+  fixed: string | null;
+}
+
+export interface ProjectAudit {
+  projectId: string;
+  name: string;
+  path: string;
+  /** Dependencies read from lockfiles. Zero means not checked, not clean. */
+  packages: number;
+  findings: Finding[];
+}
+
+export interface AuditReport {
+  projects: ProjectAudit[];
+  advisories: number;
 }

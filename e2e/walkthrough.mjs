@@ -96,6 +96,19 @@ try {
   await page.click("button:has-text('Measure')");
   await page.waitForSelector("text=Cargo registry", { timeout: 10000 });
   await shot(page, "08-overview-caches");
+
+  // Security check: point at advisory data, run it, follow a finding into
+  // the project it belongs to.
+  await page.keyboard.press("4");
+  await page.fill("input[placeholder='/path/to/osv-data']", "/data/osv");
+  await page.keyboard.press("Enter");
+  await page.click("nav >> text=Overview");
+  await page.click("button:has-text('Check now')");
+  await page.waitForSelector("text=pin known-vulnerable dependencies", { timeout: 10000 });
+  await shot(page, "09-security");
+  await page.locator("text=pin known-vulnerable dependencies").locator("xpath=../..").locator("ul button").first().click();
+  await page.waitForSelector("text=Known vulnerabilities", { timeout: 10000 });
+  await shot(page, "10-drawer-vulnerabilities");
 } finally {
   await browser.close();
 }

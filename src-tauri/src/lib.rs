@@ -62,6 +62,7 @@ pub fn run() {
             commands::tools::list_quarantine,
             commands::tools::purge_quarantine_batch,
             commands::tools::get_diagnostics,
+            commands::tools::run_audit,
             commands::scan::set_protected,
             commands::scan::ignore_project,
             commands::scan::unignore_project,

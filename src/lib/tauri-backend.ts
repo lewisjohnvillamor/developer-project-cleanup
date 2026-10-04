@@ -4,6 +4,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import type {
   AppError,
   AppInfo,
+  AuditReport,
   CacheInfo,
   FolderInfo,
   GlobalCache,
@@ -83,6 +84,7 @@ export const tauriBackend: Backend = {
   listQuarantine: () => invoke<QuarantineBatch[]>("list_quarantine"),
   purgeQuarantineBatch: (entryId) => invoke<number>("purge_quarantine_batch", { entryId }),
   getDiagnostics: () => invoke<string>("get_diagnostics"),
+  runAudit: () => invoke<AuditReport>("run_audit"),
 
   onAppError: (h) => on<AppError>("app-error", h),
 };

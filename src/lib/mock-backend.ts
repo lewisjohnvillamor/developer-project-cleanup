@@ -5,8 +5,10 @@
 import {
   type AppError,
   type ArtifactCategory,
+  type AuditReport,
   type CleanupArtifact,
   DEFAULT_SETTINGS,
+  type Finding,
   type GitState,
   type HibernateEvent,
   type HibernatePlan,
@@ -988,6 +990,50 @@ export function createMockBackend(): Backend {
     },
     async getDiagnostics() {
       return `Project Hibernate 0.1.0 (browser preview)\nOS: browser\nprojects: ${projects.length}\nhistory entries: ${history.length}`;
+    },
+    async runAudit(): Promise<AuditReport> {
+      if (!settings.advisoryDb) throw new Error("Choose where your vulnerability data lives in Settings first.");
+      await sleep(700);
+      // Deterministic per project, so the preview looks the same every time.
+      // Only Node and Rust lockfiles are read, as in the desktop app: other
+      // stacks come back as not checked rather than clean.
+      const catalogue: Record<"npm" | "crates.io", Omit<Finding, "package">[]> = {
+        npm: [
+          { id: "GHSA-jjv7-qpx3-h55q", summary: "Prototype pollution in lodash", severity: "high", fixed: "4.17.21" },
+          { id: "GHSA-vh95-rmgr-6w4m", summary: "Prototype pollution in minimist", severity: "moderate", fixed: "1.2.3" },
+          { id: "GHSA-c2qf-rxjj-qqgw", summary: "Regular expression denial of service in semver", severity: "high", fixed: "7.5.2" },
+          { id: "GHSA-952p-6rrq-rcjv", summary: "Unrestricted file upload in a build plugin", severity: "critical", fixed: null },
+        ],
+        "crates.io": [{ id: "RUSTSEC-2020-0071", summary: "Potential segfault in the time crate", severity: "critical", fixed: "0.2.23" }],
+      };
+      const pkgFor: Record<string, [string, string]> = {
+        "GHSA-jjv7-qpx3-h55q": ["lodash", "4.17.20"],
+        "GHSA-vh95-rmgr-6w4m": ["minimist", "1.2.0"],
+        "GHSA-c2qf-rxjj-qqgw": ["semver", "7.3.8"],
+        "GHSA-952p-6rrq-rcjv": ["vite-plugin-upload", "0.4.1"],
+        "RUSTSEC-2020-0071": ["time", "0.1.44"],
+      };
+      const report: AuditReport = { advisories: 2481, projects: [] };
+      for (const p of projects) {
+        const eco = p.stacks.includes("node") ? "npm" : p.stacks.includes("rust") ? "crates.io" : null;
+        let seed = 0;
+        for (const ch of p.id) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+        if (!eco) {
+          report.projects.push({ projectId: p.id, name: p.name, path: p.path, packages: 0, findings: [] });
+          continue;
+        }
+        const pool = catalogue[eco];
+        const findings: Finding[] = pool
+          .filter((_, i) => (seed >> (i * 3)) % 4 === 0)
+          .map((f) => {
+            const [name, version] = pkgFor[f.id]!;
+            return { ...f, package: { ecosystem: eco, name, version } };
+          });
+        const order = ["unknown", "low", "moderate", "high", "critical"];
+        findings.sort((a, b) => order.indexOf(b.severity) - order.indexOf(a.severity));
+        report.projects.push({ projectId: p.id, name: p.name, path: p.path, packages: 80 + (seed % 900), findings });
+      }
+      return report;
     },
   };
 }

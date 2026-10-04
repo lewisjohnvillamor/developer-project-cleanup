@@ -81,6 +81,10 @@ pub struct Settings {
     /// Notify after a scheduled scan when at least this many bytes are
     /// safely reclaimable.
     pub notify_threshold_bytes: u64,
+    /// Where OSV advisory data lives: a JSON file or a folder of them. The
+    /// security check reads it and nothing else; the app never downloads it.
+    #[serde(default)]
+    pub advisory_db: Option<PathBuf>,
 }
 
 impl Default for Settings {
@@ -103,6 +107,7 @@ impl Default for Settings {
             incremental_scans: true,
             scheduled_scan_hours: 0,
             notify_threshold_bytes: 1_000_000_000,
+            advisory_db: None,
         }
     }
 }

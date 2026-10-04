@@ -5,6 +5,7 @@
 import type {
   AppError,
   AppInfo,
+  AuditReport,
   CacheInfo,
   ExportFormat,
   FolderInfo,
@@ -72,6 +73,8 @@ export interface Backend {
   listQuarantine(): Promise<QuarantineBatch[]>;
   purgeQuarantineBatch(entryId: string): Promise<number>;
   getDiagnostics(): Promise<string>;
+  /** Check every scanned project's lockfiles against the advisory data in Settings. */
+  runAudit(): Promise<AuditReport>;
 
   /** A write to disk that failed. Reported so a lost record is never silent. */
   onAppError(handler: (e: AppError) => void): Promise<Unlisten>;

@@ -12,12 +12,13 @@ import {
   HelpCircle,
   Layers,
   Shield,
+  ShieldAlert,
   ShieldOff,
   Timer,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Badge, GitBadge, SafetyBadge, StatusBadge } from "@/components/common/Badge";
+import { Badge, GitBadge, SafetyBadge, SeverityBadge, StatusBadge } from "@/components/common/Badge";
 import { Button, IconButton } from "@/components/common/Button";
 import { Checkbox, Menu } from "@/components/common/Controls";
 import { useAppStore } from "@/stores/app-store";
@@ -28,6 +29,7 @@ import { formatBytes, formatCount, formatDate, formatRelative } from "@/utils/fo
 export function ProjectDetailsDrawer() {
   const id = useAppStore((s) => s.drawerProjectId);
   const project = useAppStore((s) => s.projects.find((p) => p.id === id) ?? null);
+  const projectAudit = useAppStore((s) => s.audit?.projects.find((a) => a.projectId === id) ?? null);
   const close = useAppStore((s) => s.closeDrawer);
   const setProtected = useAppStore((s) => s.setProtected);
   const ignore = useAppStore((s) => s.ignoreProject);
@@ -285,6 +287,39 @@ export function ProjectDetailsDrawer() {
             </p>
           )}
         </section>
+
+        {projectAudit && projectAudit.findings.length > 0 && (
+          <section className="mt-5">
+            <h3 className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
+              <ShieldAlert size={11} className="text-danger" /> Known vulnerabilities · {projectAudit.findings.length}
+            </h3>
+            <p className="mb-2 text-[12px] text-fg-muted">
+              {p.status === "hibernated"
+                ? "Waking this project would reinstall these exact versions. Upgrade them first."
+                : "Pinned in this project's lockfile."}
+            </p>
+            <ul className="divide-y divide-border rounded-lg border border-border">
+              {projectAudit.findings.map((f) => (
+                <li key={`${f.id}-${f.package.name}`} className="px-3 py-2 text-[12px]">
+                  <div className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate font-mono text-fg">
+                      {f.package.name}@{f.package.version}
+                    </span>
+                    <SeverityBadge severity={f.severity} />
+                  </div>
+                  {f.summary && <div className="mt-0.5 text-fg-muted">{f.summary}</div>}
+                  <div className="mt-0.5 flex gap-3 text-[11px] text-fg-subtle">
+                    <span className="font-mono selectable">{f.id}</span>
+                    <span>{f.fixed ? `Fixed in ${f.fixed}` : "No fix published yet"}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        {projectAudit && projectAudit.packages === 0 && (
+          <p className="mt-5 text-[11.5px] text-fg-subtle">Not checked for vulnerabilities: no supported lockfile in this project.</p>
+        )}
 
         {p.protectedEntries.length > 0 && (
           <section className="mt-5">
