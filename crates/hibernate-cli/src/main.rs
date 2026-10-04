@@ -646,6 +646,17 @@ fn cmd_scan(
             String::new()
         }
     );
+    let shared: u64 = visible
+        .iter()
+        .flat_map(|p| &p.artifacts)
+        .map(|a| a.shared_elsewhere)
+        .sum();
+    if shared > 0 {
+        println!(
+            "{} more is hard-linked to shared package stores and would not be freed, so it is not counted above.",
+            format::bytes(shared)
+        );
+    }
     if !s.by_category.is_empty() {
         println!();
         println!("Reclaimable storage by category");
@@ -717,8 +728,19 @@ fn print_project(p: &Project, now: chrono::DateTime<Utc>) {
             Safety::Review => "review",
             Safety::Protected => "protected",
         };
+        // A pnpm or Yarn store hard-links most of node_modules, so its
+        // honest figure is far below the folder's apparent size. Say why,
+        // or the correct number reads as a measuring bug.
+        let shared = if a.shared_elsewhere > 0 {
+            format!(
+                "   +{} shared, not counted",
+                format::bytes(a.shared_elsewhere)
+            )
+        } else {
+            String::new()
+        };
         println!(
-            "    {:<28}{:>10}   {tag}",
+            "    {:<28}{:>10}   {tag}{shared}",
             a.relative_path,
             format::bytes(a.bytes)
         );
