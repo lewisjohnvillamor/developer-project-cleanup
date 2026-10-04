@@ -176,8 +176,9 @@ Two things it deliberately will not do:
   choice, and keeping it out of the engine is why the dependency list still
   backs up "nothing leaves your machine".
 - **It never calls a project clean that it could not read.** A project with
-  no lockfile we parse is reported as *not checked*, not as safe. Currently
-  `package-lock.json` and `Cargo.lock`; more behind the same interface.
+  no lockfile we parse is reported as *not checked*, not as safe. Reads
+  `package-lock.json`, `pnpm-lock.yaml` (v5–v9), `yarn.lock` (Yarn 1 and
+  Berry) and `Cargo.lock`.
 
 ### When a write fails
 
