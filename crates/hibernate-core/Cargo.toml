@@ -16,7 +16,7 @@ chrono.workspace = true
 log.workspace = true
 rayon = "1.10"
 trash = "5"
-dirs = "6"
+dirs = "7"
 thiserror = "2"
 
 [dev-dependencies]
